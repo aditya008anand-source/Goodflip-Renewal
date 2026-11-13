@@ -1,0 +1,144 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ParsedLead } from './sheetImport';
+
+export interface SyncResult {
+  rowsSeen: number;
+  rowsAdded: number;
+  rowsUpdated: number;
+  rowsFlagged: number;
+  errors: string[];
+}
+
+// Upserts parsed sheet rows into the database WITHOUT ever overwriting
+// interaction history or payment records that already exist for a lead —
+// only "master" fields (name, programme, expiry date, etc.) get refreshed
+// on an existing lead. New leads get their initial interactions/payment
+// migrated in from the sheet's 1st/2nd/3rd attempt columns and Payment
+// Amount column; that migration only happens once, on first import, driven
+// by `rowKey` not existing yet.
+export async function syncParsedLeadsToDatabase(
+  supabase: SupabaseClient,
+  leads: ParsedLead[]
+): Promise<SyncResult> {
+  const result: SyncResult = { rowsSeen: 0, rowsAdded: 0, rowsUpdated: 0, rowsFlagged: 0, errors: [] };
+
+  // Resolve source_coach_name -> coach_id against coaches that already have
+  // an invited account, matching case-insensitively on display_name.
+  const { data: coaches } = await supabase.from('coaches').select('id, display_name');
+  const coachByName = new Map(
+    (coaches ?? []).map((c: any) => [c.display_name.trim().toLowerCase(), c.id])
+  );
+
+  for (const lead of leads) {
+    result.rowsSeen += 1;
+    try {
+      const coachId = lead.sourceCoachName
+        ? coachByName.get(lead.sourceCoachName.trim().toLowerCase()) ?? null
+        : null;
+
+      const { data: existing } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('source_row_key', lead.rowKey)
+        .eq('month_cohort', lead.monthCohort)
+        .maybeSingle();
+
+      if (existing) {
+        // Update master fields, but "first non-empty value wins": a second
+        // sheet row for the same lead (e.g. a sparser Nutra/add-on order row
+        // sharing the same phone number) must never blank out or replace
+        // good data a richer earlier row already set. Only fields that are
+        // currently empty on the existing lead get filled in from this row.
+        const candidateFields: Record<string, unknown> = {
+          patient_name: lead.patientName,
+          programme: lead.programme,
+          condition: lead.condition,
+          team: lead.team,
+          clinical_discipline: lead.clinicalDiscipline,
+          plan_expiry_date: lead.planExpiryDate,
+          source_coach_name: lead.sourceCoachName,
+        };
+        const updatePayload: Record<string, unknown> = {};
+        for (const [field, value] of Object.entries(candidateFields)) {
+          if (value != null && value !== '' && (existing as any)[field] == null) {
+            updatePayload[field] = value;
+          }
+        }
+        if (!existing.coach_id && coachId) updatePayload.coach_id = coachId;
+
+        // lead_master_status (sheet Column I: Active/Inactive/Nutra Order) is
+        // different from the fields above — it's a live sheet value that can
+        // genuinely change run to run, so it's always refreshed here rather
+        // than only filled in once while empty.
+        if (lead.leadMasterStatus !== (existing as any).lead_master_status) {
+          updatePayload.lead_master_status = lead.leadMasterStatus;
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          const { error } = await supabase.from('leads').update(updatePayload).eq('id', existing.id);
+          if (error) throw error;
+        }
+        result.rowsUpdated += 1;
+        if (lead.needsReview) result.rowsFlagged += 1;
+        continue;
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('leads')
+        .insert({
+          patient_name: lead.patientName,
+          mobile_number: lead.mobileNumber,
+          programme: lead.programme,
+          condition: lead.condition,
+          team: lead.team,
+          clinical_discipline: lead.clinicalDiscipline,
+          source_coach_name: lead.sourceCoachName,
+          coach_id: coachId,
+          month_cohort: lead.monthCohort,
+          plan_expiry_date: lead.planExpiryDate,
+          status: lead.status,
+          lead_master_status: lead.leadMasterStatus,
+          needs_review: lead.needsReview,
+          review_note: lead.reviewNote,
+          source_row_key: lead.rowKey,
+        })
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
+      result.rowsAdded += 1;
+      if (lead.needsReview) result.rowsFlagged += 1;
+
+      // Migrate attempt history (new lead only — never re-run against an
+      // existing lead, which is why this sits inside the `!existing` branch).
+      for (const attempt of lead.attempts) {
+        const { error: interactionError } = await supabase.from('interactions').insert({
+          lead_id: inserted.id,
+          call_datetime: attempt.callDate,
+          outcome: attempt.outcome,
+          updated_by_name: lead.sourceCoachName ?? 'Migrated from source sheet',
+        });
+        if (interactionError) result.errors.push(interactionError.message);
+      }
+
+      if (lead.payment) {
+        const { error: paymentError } = await supabase.from('payments').insert({
+          lead_id: inserted.id,
+          status: 'Paid',
+          amount: lead.payment.amount,
+          remarks: lead.payment.note
+            ? `Migrated from source sheet. Renewed plan: ${lead.payment.note}`
+            : 'Migrated from source sheet.',
+        });
+        if (paymentError) result.errors.push(paymentError.message);
+        else {
+          await supabase.from('leads').update({ payment_status: 'Paid' }).eq('id', inserted.id);
+        }
+      }
+    } catch (err: any) {
+      result.errors.push(`${lead.patientName} (${lead.mobileNumber}): ${err.message}`);
+    }
+  }
+
+  return result;
+}
