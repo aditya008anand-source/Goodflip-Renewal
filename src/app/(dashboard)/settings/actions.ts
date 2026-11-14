@@ -25,6 +25,7 @@ export async function inviteCoach(formData: FormData): Promise<string> {
     email,
     options: {
       data: { name, role },
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/set-password`,
     },
   });
   if (error) throw new Error(error.message);
