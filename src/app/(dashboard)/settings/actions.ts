@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin, requireSuperAdmin } from '@/lib/auth';
 import { createServerSupabase, createServiceRoleSupabase } from '@/lib/supabase/server';
 
-export async function inviteCoach(formData: FormData) {
+export async function inviteCoach(formData: FormData): Promise<string> {
   await requireAdmin();
 
   const email = String(formData.get('email') ?? '').trim();
@@ -13,12 +13,19 @@ export async function inviteCoach(formData: FormData) {
   if (!email || !name) throw new Error('Name and email are required.');
 
   // Requires the service-role key — this is the one place the app
-  // deliberately bypasses RLS, to create the auth user and send the
-  // Supabase Auth invite email.
+  // deliberately bypasses RLS, to create the auth user.
   const admin = createServiceRoleSupabase();
 
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { name, role },
+  // generateLink creates the user + a one-time invite link WITHOUT sending
+  // any email itself (Supabase's default mailer and the custom SMTP options
+  // we tried were both unreliable). The admin copies the returned link and
+  // sends it manually (WhatsApp, email, etc.) instead.
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'invite',
+    email,
+    options: {
+      data: { name, role },
+    },
   });
   if (error) throw new Error(error.message);
 
@@ -33,6 +40,7 @@ export async function inviteCoach(formData: FormData) {
   }
 
   revalidatePath('/settings');
+  return data.properties.action_link;
 }
 
 // "Later" path for item 2 — turn an existing coach into an admin, or an

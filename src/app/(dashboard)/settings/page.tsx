@@ -73,9 +73,10 @@ export default async function SettingsPage() {
       <div className="card">
         <h2 className="text-sm font-semibold text-slate-800 mb-1">Coaches &amp; Admins</h2>
         <p className="text-xs text-slate-500 mb-3">
-          Inviting someone creates their login and sends a Supabase Auth invite email with a link
-          to set their password. Choose their access (Coach/Admin) now, or change it later below —
-          a Coach only sees their own leads, an Admin sees everything. &quot;Verify Access&quot; and
+          Inviting someone creates their login and gives you a one-time link to set their password —
+          copy it and send it to them yourself (WhatsApp, email, etc.); no email is sent
+          automatically. Choose their access (Coach/Admin) now, or change it later below — a Coach
+          only sees their own leads, an Admin sees everything. &quot;Verify Access&quot; and
           &quot;Order Access&quot; are both separate from Admin — only people you grant them to
           (only you can grant either) can verify/reject a payment, or fill in Order ID/tracking and
           Plan Assigned on the Orders page.
