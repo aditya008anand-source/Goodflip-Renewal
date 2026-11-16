@@ -18,15 +18,30 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    if (signInError) {
+      setLoading(false);
+      setError(signInError.message);
+      return;
+    }
+
+    // Self-signups (via /join) stay unapproved until an admin flips it on in
+    // Settings — block them here rather than letting them into the app.
+    const { data: profile } = await supabase
+      .from('users')
+      .select('approved')
+      .eq('id', signInData.user.id)
+      .maybeSingle();
+
     setLoading(false);
 
-    if (signInError) {
-      setError(signInError.message);
+    if (profile && profile.approved === false) {
+      await supabase.auth.signOut();
+      setError('Your account is awaiting admin approval. Please check back once approved.');
       return;
     }
 
@@ -92,7 +107,11 @@ export default function LoginPage() {
           </button>
 
           <p className="text-xs text-slate-400 text-center pt-2">
-            New coach? Use the invite link sent to your email to set your password first.
+            New here?{' '}
+            <a href="/join" className="text-brand-700 underline">
+              Create your account
+            </a>{' '}
+            — your admin will approve it before you can sign in.
           </p>
         </form>
       </div>

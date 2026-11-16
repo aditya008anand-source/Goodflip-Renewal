@@ -37,6 +37,8 @@ export async function middleware(request: NextRequest) {
   // DOES exist should not be bounced away from here either (the person
   // still needs to finish setting their password before heading to /overview).
   const isSetPasswordRoute = pathname.startsWith('/set-password');
+  // /join is the public self-signup page — reachable with no session at all.
+  const isJoinRoute = pathname.startsWith('/join');
 
   // 24-hour auto-logout: mysaathi_login_at is set by the login page at
   // sign-in time. Only a session whose cookie is actually present AND older
@@ -51,7 +53,7 @@ export async function middleware(request: NextRequest) {
   const sessionExpired = !!loginAtCookie && Date.now() - Number(loginAtCookie) > dayMs;
   const user = sessionExpired ? null : authedUser;
 
-  if (!user && !isAuthRoute && !isSetPasswordRoute) {
+  if (!user && !isAuthRoute && !isSetPasswordRoute && !isJoinRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     const redirectResponse = NextResponse.redirect(url);

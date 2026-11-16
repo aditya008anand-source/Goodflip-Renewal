@@ -8,6 +8,7 @@ import CategoryActiveToggle from '@/components/forms/CategoryActiveToggle';
 import CategoryIncentiveModeToggle from '@/components/forms/CategoryIncentiveModeToggle';
 import IncentiveTargetTierForm from '@/components/forms/IncentiveTargetTierForm';
 import UserRowActions from '@/components/forms/UserRowActions';
+import PendingUserActions from '@/components/forms/PendingUserActions';
 import SyncButton from '@/components/SyncButton';
 import { LEAD_STATUSES } from '@/lib/types';
 
@@ -15,11 +16,14 @@ export default async function SettingsPage() {
   const me = await requireAdmin();
   const supabase = createServerSupabase();
 
-  const { data: allUsers } = await supabase
+  const { data: allUsersRaw } = await supabase
     .from('users')
-    .select('id, name, email, role, is_super_admin, can_verify_payments, can_manage_orders')
+    .select('id, name, email, role, is_super_admin, can_verify_payments, can_manage_orders, approved')
     .order('role')
     .order('name');
+
+  const allUsers = (allUsersRaw ?? []).filter((u) => u.approved !== false);
+  const pendingUsers = (allUsersRaw ?? []).filter((u) => u.approved === false);
 
   const { data: categories } = await supabase
     .from('payment_categories')
@@ -119,6 +123,43 @@ export default async function SettingsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="card">
+        <h2 className="text-sm font-semibold text-slate-800 mb-1">Self-signup &amp; approvals</h2>
+        <p className="text-xs text-slate-500 mb-3">
+          Send this one link to everyone at once (WhatsApp, etc.) instead of generating a separate
+          invite link per person — anyone with a @tatvacare.in email can create their own login
+          there, but they can&apos;t sign in until you approve them below.
+        </p>
+        <p className="text-xs font-mono bg-slate-50 border border-slate-200 rounded px-3 py-2 mb-4 break-all">
+          {process.env.NEXT_PUBLIC_SITE_URL ?? ''}/join
+        </p>
+
+        {pendingUsers.length === 0 ? (
+          <p className="text-xs text-slate-400">No pending requests.</p>
+        ) : (
+          <table className="table-base">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingUsers.map((u: any) => (
+                <tr key={u.id}>
+                  <td className="font-medium text-slate-700">{u.name}</td>
+                  <td className="text-slate-500">{u.email}</td>
+                  <td>
+                    <PendingUserActions userId={u.id} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="card">

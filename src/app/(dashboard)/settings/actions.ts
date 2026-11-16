@@ -16,7 +16,7 @@ export async function inviteCoach(formData: FormData): Promise<string> {
   // deliberately bypasses RLS, to create the auth user.
   const admin = createServiceRoleSupabase();
 
-  // generateLink creates the user + a one-time invite link WITHOUT sending
+  // generateLink creates the user + a one-time invite token WITHOUT sending
   // any email itself (Supabase's default mailer and the custom SMTP options
   // we tried were both unreliable). The admin copies the returned link and
   // sends it manually (WhatsApp, email, etc.) instead.
@@ -25,7 +25,6 @@ export async function inviteCoach(formData: FormData): Promise<string> {
     email,
     options: {
       data: { name, role },
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/set-password`,
     },
   });
   if (error) throw new Error(error.message);
@@ -41,7 +40,36 @@ export async function inviteCoach(formData: FormData): Promise<string> {
   }
 
   revalidatePath('/settings');
-  return data.properties.action_link;
+
+  // We build our OWN link to /set-password (instead of returning
+  // data.properties.action_link, which points straight at Supabase's
+  // verify endpoint) because WhatsApp auto-fetches a link the moment it's
+  // pasted into a chat, to build its preview card — that fetch alone would
+  // "use up" a one-time Supabase verify link before the person ever clicks
+  // it. Our link only gets verified once a real browser actually renders
+  // /set-password and runs its JS, which WhatsApp's preview bot doesn't do.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  return `${siteUrl}/set-password?token_hash=${data.properties.hashed_token}&type=invite`;
+}
+
+// Approves a self-signup (/join) account so they can actually log in.
+// Admin-invited coaches never need this — they're created already approved.
+export async function approveUser(userId: string) {
+  await requireAdmin();
+  const admin = createServiceRoleSupabase();
+  const { error } = await admin.from('users').update({ approved: true }).eq('id', userId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/settings');
+}
+
+// Rejects a self-signup request outright — deletes the auth user (and, via
+// cascade, their users/coaches rows) rather than leaving it sitting unapproved.
+export async function rejectUser(userId: string) {
+  await requireAdmin();
+  const admin = createServiceRoleSupabase();
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/settings');
 }
 
 // "Later" path for item 2 — turn an existing coach into an admin, or an

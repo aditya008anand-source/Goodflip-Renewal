@@ -1,15 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 // Reached by clicking the invite link an admin generates in Settings. The
-// link itself carries a one-time Supabase session in the URL hash — this
-// page's job is to wait for the browser client to pick that up, then let
-// the person choose the password they'll actually log in with from now on.
+// link carries ?token_hash=...&type=invite — this page exchanges that for a
+// session itself (via verifyOtp, client-side only, so a link-preview bot
+// like WhatsApp's never consumes it), then lets the person choose the
+// password they'll actually log in with from now on.
+//
+// useSearchParams() requires a Suspense boundary in Next 14 — the default
+// export below just provides that; all the real logic lives in the inner
+// component.
 export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <SetPasswordForm />
+    </Suspense>
+  );
+}
+
+function SetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [ready, setReady] = useState(false);
   const [invalidLink, setInvalidLink] = useState(false);
@@ -21,32 +35,54 @@ export default function SetPasswordPage() {
 
   useEffect(() => {
     let cancelled = false;
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled && data.session) setReady(true);
-    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setReady(true);
+      if (session && !cancelled) setReady(true);
     });
 
-    // If no session shows up in a few seconds, the link was already used,
-    // expired, or opened without its hash (e.g. pasted somewhere that strips
-    // it) — tell the person instead of leaving them on a dead form.
-    const timeout = setTimeout(() => {
-      if (!cancelled) {
-        supabase.auth.getSession().then(({ data }) => {
-          if (!cancelled && !data.session) setInvalidLink(true);
-        });
+    async function establishSession() {
+      // Already have a session from an earlier step on this page? Nothing to do.
+      const { data: existing } = await supabase.auth.getSession();
+      if (existing.session) {
+        if (!cancelled) setReady(true);
+        return;
       }
-    }, 5000);
+
+      const tokenHash = searchParams.get('token_hash');
+      const type = searchParams.get('type');
+      if (tokenHash && type) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: type as 'invite',
+        });
+        if (!cancelled) {
+          if (verifyError) setInvalidLink(true);
+          else setReady(true);
+        }
+        return;
+      }
+
+      // Older-style link with the session in the URL hash instead — give the
+      // client (and the onAuthStateChange listener above) a moment to
+      // auto-detect it, same as before.
+      timeout = setTimeout(() => {
+        if (!cancelled) {
+          supabase.auth.getSession().then(({ data }) => {
+            if (!cancelled && !data.session) setInvalidLink(true);
+          });
+        }
+      }, 5000);
+    }
+
+    establishSession();
 
     return () => {
       cancelled = true;
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       listener.subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
