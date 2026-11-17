@@ -132,6 +132,34 @@ export default async function RevenuePage({
     .filter((c) => c.amount > 0)
     .map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }));
 
+  // For the Coach-wise Detailed Report below: the 4 simple_percentage
+  // categories get their own revenue/incentive columns, looked up by name
+  // rather than a hardcoded id (so this keeps working if a category is ever
+  // recreated with a new id).
+  const categoryIdByName = (categoryName: string) =>
+    (allCategories ?? []).find((c: any) => c.name === categoryName)?.id ?? null;
+  const nutraCategoryId = categoryIdByName('Nutra');
+  const cgmCategoryId = categoryIdByName('CGM');
+  const bcaCategoryId = categoryIdByName('BCA');
+  const medicineCategoryId = categoryIdByName('Medicine');
+
+  // "Target count" is the lowest-rung threshold on the Careplan ladder for
+  // this month — the same for every coach (the ladder isn't per-coach),
+  // shown so the report reads standalone without also opening Settings.
+  let careplanTargetCount = '—';
+  {
+    let ladder: NonNullable<typeof targetTiers> = [];
+    for (const cat of careplanCategories) {
+      ladder = findApplicableTiers(targetTiers ?? [], cat.id, activeMonth);
+      if (ladder.length > 0) break;
+    }
+    if (ladder.length > 0) {
+      const lowestTier = ladder.reduce((min, t) => (t.min_value < min.min_value ? t : min), ladder[0]);
+      careplanTargetCount =
+        lowestTier.target_type === 'count' ? String(lowestTier.min_value) : `${lowestTier.min_value}%`;
+    }
+  }
+
   const coachRows = coachNames.map((name) => {
     const theirLeads = allLeads.filter((l: any) => l.source_coach_name === name);
     const theirPayments = (payments ?? []).filter((p) =>
@@ -205,14 +233,45 @@ export default async function RevenuePage({
       });
     }
 
+    // Per-category revenue/incentive for the 4 simple_percentage categories
+    // — same per-payment rule lookup as the incentiveTotal loop above, so
+    // these 4 always add up to the matching slice of incentiveTotal.
+    const revenueIncentiveFor = (categoryId: string | null) => {
+      if (!categoryId) return { revenue: 0, incentive: 0 };
+      let catRevenue = 0;
+      let catIncentive = 0;
+      for (const p of theirPayments) {
+        if (p.category_id !== categoryId) continue;
+        const amount = Number(p.amount ?? 0);
+        catRevenue += amount;
+        const rule = findApplicableRule(incentiveRules ?? [], categoryId, activeMonth);
+        catIncentive += calculateIncentive(rule, amount).amount;
+      }
+      return { revenue: catRevenue, incentive: catIncentive };
+    };
+    const nutra = revenueIncentiveFor(nutraCategoryId);
+    const cgm = revenueIncentiveFor(cgmCategoryId);
+    const bca = revenueIncentiveFor(bcaCategoryId);
+    const medicine = revenueIncentiveFor(medicineCategoryId);
+
+    const careplanRow = targetBreakdown.find((t) => t.category === 'Careplan');
+
     return {
       coach: name,
       assigned: theirLeads.length,
+      activeLeads: activeLeadsCount,
       renewals,
       conversion: theirLeads.length ? ((renewals / theirLeads.length) * 100).toFixed(1) : '0.0',
       revenue,
       incentive: incentiveTotal,
       targetBreakdown,
+      careplanRenewedCount: careplanRow?.converted ?? 0,
+      careplanEligiblePct: careplanRow?.rate ?? 0,
+      careplanIncentive: careplanRow?.incentive ?? 0,
+      nutra,
+      cgm,
+      bca,
+      medicine,
     };
   });
 
@@ -400,6 +459,95 @@ export default async function RevenuePage({
           </div>
         );
       })()}
+
+      <div className="card overflow-x-auto mt-6">
+        <h2 className="text-sm font-semibold text-slate-800 mb-1">Coach-wise Detailed Report</h2>
+        <p className="text-xs text-slate-400 mb-3">
+          Target count is the lowest Careplan tier threshold configured for this month — the same
+          for every coach. Nutra/CGM/BCA/Medicine have no target of their own; they&apos;re simple
+          %/fixed-rate categories.
+        </p>
+        <table className="table-base">
+          <thead>
+            <tr>
+              <th rowSpan={2} className="align-bottom">Coach</th>
+              <th rowSpan={2} className="text-right align-bottom">Total Leads</th>
+              <th rowSpan={2} className="text-right align-bottom">Active Leads</th>
+              <th colSpan={4} className="text-center border-l border-slate-200">Careplan</th>
+              <th colSpan={2} className="text-center border-l border-slate-200">Nutra</th>
+              <th colSpan={2} className="text-center border-l border-slate-200">CGM</th>
+              <th colSpan={2} className="text-center border-l border-slate-200">BCA</th>
+              <th colSpan={2} className="text-center border-l border-slate-200">Medicine</th>
+              <th rowSpan={2} className="text-right align-bottom border-l border-slate-200">
+                Total Incentive
+              </th>
+            </tr>
+            <tr>
+              <th className="text-right border-l border-slate-200">Target</th>
+              <th className="text-right">Renewed</th>
+              <th className="text-right">Eligible %</th>
+              <th className="text-right">Incentive</th>
+              <th className="text-right border-l border-slate-200">Revenue</th>
+              <th className="text-right">Incentive</th>
+              <th className="text-right border-l border-slate-200">Revenue</th>
+              <th className="text-right">Incentive</th>
+              <th className="text-right border-l border-slate-200">Revenue</th>
+              <th className="text-right">Incentive</th>
+              <th className="text-right border-l border-slate-200">Revenue</th>
+              <th className="text-right">Incentive</th>
+            </tr>
+          </thead>
+          <tbody>
+            {coachRows.map((r) => (
+              <tr key={r.coach}>
+                <td className="font-medium text-slate-700">{r.coach}</td>
+                <td className="text-right">{r.assigned}</td>
+                <td className="text-right">{r.activeLeads}</td>
+                <td className="text-right border-l border-slate-200">{careplanTargetCount}</td>
+                <td className="text-right">{r.careplanRenewedCount}</td>
+                <td className="text-right">{r.careplanEligiblePct}%</td>
+                <td className="text-right font-medium text-brand-700">
+                  ₹{r.careplanIncentive.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right border-l border-slate-200">
+                  ₹{r.nutra.revenue.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right font-medium text-brand-700">
+                  ₹{r.nutra.incentive.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right border-l border-slate-200">
+                  ₹{r.cgm.revenue.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right font-medium text-brand-700">
+                  ₹{r.cgm.incentive.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right border-l border-slate-200">
+                  ₹{r.bca.revenue.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right font-medium text-brand-700">
+                  ₹{r.bca.incentive.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right border-l border-slate-200">
+                  ₹{r.medicine.revenue.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right font-medium text-brand-700">
+                  ₹{r.medicine.incentive.toLocaleString('en-IN')}
+                </td>
+                <td className="text-right font-semibold text-brand-700 border-l border-slate-200">
+                  ₹{r.incentive.toLocaleString('en-IN')}
+                </td>
+              </tr>
+            ))}
+            {coachRows.length === 0 && (
+              <tr>
+                <td colSpan={16} className="text-center text-slate-400 py-4">
+                  No coaches with leads this month yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
