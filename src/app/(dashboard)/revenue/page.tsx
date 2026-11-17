@@ -285,6 +285,7 @@ export default async function RevenuePage({
       targetBreakdown,
       careplanRenewedCount: careplanRow?.converted ?? 0,
       careplanEligiblePct: careplanRow?.rate ?? 0,
+      careplanRevenue: careplanRow?.revenue ?? 0,
       careplanIncentive: careplanRow?.incentive ?? 0,
       nutra,
       cgm,
@@ -490,6 +491,7 @@ export default async function RevenuePage({
               activeLeads: r.activeLeads,
               careplanRenewed: r.careplanRenewedCount,
               careplanEligiblePct: r.careplanEligiblePct,
+              careplanRevenue: r.careplanRevenue,
               careplanIncentive: r.careplanIncentive,
               nutraRevenue: r.nutra.revenue,
               nutraIncentive: r.nutra.incentive,
@@ -514,7 +516,7 @@ export default async function RevenuePage({
               <th rowSpan={2} className="align-bottom">Coach</th>
               <th rowSpan={2} className="text-right align-bottom">Total Leads</th>
               <th rowSpan={2} className="text-right align-bottom">Active Leads</th>
-              <th colSpan={4} className="text-center border-l border-slate-200">Careplan</th>
+              <th colSpan={5} className="text-center border-l border-slate-200">Careplan</th>
               <th colSpan={2} className="text-center border-l border-slate-200">Nutra</th>
               <th colSpan={2} className="text-center border-l border-slate-200">CGM</th>
               <th colSpan={2} className="text-center border-l border-slate-200">BCA</th>
@@ -527,6 +529,7 @@ export default async function RevenuePage({
               <th className="text-right border-l border-slate-200">Target</th>
               <th className="text-right">Renewed</th>
               <th className="text-right">Eligible %</th>
+              <th className="text-right">Revenue</th>
               <th className="text-right">Incentive</th>
               <th className="text-right border-l border-slate-200">Revenue</th>
               <th className="text-right">Incentive</th>
@@ -547,6 +550,7 @@ export default async function RevenuePage({
                 <td className="text-right border-l border-slate-200">{careplanTargetCount}</td>
                 <td className="text-right">{r.careplanRenewedCount}</td>
                 <td className="text-right">{r.careplanEligiblePct}%</td>
+                <td className="text-right">₹{r.careplanRevenue.toLocaleString('en-IN')}</td>
                 <td className="text-right font-medium text-brand-700">
                   ₹{r.careplanIncentive.toLocaleString('en-IN')}
                 </td>

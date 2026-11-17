@@ -10,6 +10,7 @@ export interface CoachReportExportRow {
   activeLeads: number;
   careplanRenewed: number;
   careplanEligiblePct: number;
+  careplanRevenue: number;
   careplanIncentive: number;
   nutraRevenue: number;
   nutraIncentive: number;
@@ -41,6 +42,7 @@ export default function ExportCoachReportButton({
       'Careplan Target',
       'Careplan Renewed',
       'Careplan Eligible %',
+      'Careplan Revenue',
       'Careplan Incentive',
       'Nutra Revenue',
       'Nutra Incentive',
@@ -60,6 +62,7 @@ export default function ExportCoachReportButton({
       careplanTarget,
       r.careplanRenewed,
       r.careplanEligiblePct,
+      r.careplanRevenue,
       r.careplanIncentive,
       r.nutraRevenue,
       r.nutraIncentive,
