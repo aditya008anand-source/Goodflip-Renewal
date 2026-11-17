@@ -3,6 +3,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 import { currentMonthCohort } from '@/lib/months';
 import MonthTabs from '@/components/MonthTabs';
 import StatCard from '@/components/StatCard';
+import BreakdownStatCard, { type BreakdownRow } from '@/components/BreakdownStatCard';
 import Link from 'next/link';
 
 export default async function OverviewPage({
@@ -43,17 +44,79 @@ export default async function OverviewPage({
   // exactly (previously this counted every payments.status === 'Paid' row
   // regardless of verification, which inflated this number versus Revenue).
   let totalRevenue = 0;
-  let verifiedPayments: { amount: number | null; lead_id: string }[] = [];
+  let verifiedPayments: {
+    amount: number | null;
+    lead_id: string;
+    category_id: string | null;
+    payment_categories: { name: string } | null;
+  }[] = [];
+  let categories: { id: string; name: string; target_group: string | null }[] = [];
   if (user.role === 'admin' && allLeads.length > 0) {
     const { data: payments } = await supabase
       .from('payments')
-      .select('amount, lead_id')
+      .select('amount, lead_id, category_id, payment_categories(name)')
       .eq('status', 'Paid')
       .eq('verification_status', 'verified')
       .in('lead_id', allLeads.map((l) => l.id));
-    verifiedPayments = payments ?? [];
+    verifiedPayments = (payments ?? []) as any;
     totalRevenue = verifiedPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+
+    const { data: cats } = await supabase.from('payment_categories').select('id, name, target_group');
+    categories = cats ?? [];
   }
+
+  // Careplan group (its 3 team variants, pooled by target_group — see
+  // migration-9) vs every other category, for the Renewed / Revenue
+  // breakdown cards below.
+  const careplanCategories = categories.filter((c) => c.target_group === 'careplan');
+  const careplanCategoryIds = new Set(careplanCategories.map((c) => c.id));
+
+  const renewedLeads = allLeads.filter((l) => l.status === 'Renewed');
+  const careplanRenewedLeadIds = new Set(
+    verifiedPayments
+      .filter((p) => p.category_id && careplanCategoryIds.has(p.category_id))
+      .map((p) => p.lead_id)
+  );
+  const careplanRenewedCount = renewedLeads.filter((l) => careplanRenewedLeadIds.has(l.id)).length;
+  const othersRenewedCount = renewedLeads.length - careplanRenewedCount;
+  const renewedBreakdown: BreakdownRow[] = [
+    { label: 'Careplan', value: String(careplanRenewedCount), emphasize: true },
+    ...careplanCategories
+      .map((c) => ({
+        label: c.name,
+        value: String(
+          renewedLeads.filter((l) =>
+            verifiedPayments.some((p) => p.lead_id === l.id && p.category_id === c.id)
+          ).length
+        ),
+        indent: true,
+      }))
+      .filter((r) => r.value !== '0'),
+    { label: 'Others', value: String(othersRenewedCount), emphasize: true },
+  ];
+
+  const careplanRevenue = verifiedPayments
+    .filter((p) => p.category_id && careplanCategoryIds.has(p.category_id))
+    .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const careplanRevenueBreakdown: BreakdownRow[] = careplanCategories
+    .map((c) => ({
+      label: c.name,
+      amount: verifiedPayments
+        .filter((p) => p.category_id === c.id)
+        .reduce((sum, p) => sum + Number(p.amount ?? 0), 0),
+    }))
+    .filter((c) => c.amount > 0)
+    .map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }));
+
+  const totalRevenueByCategory = new Map<string, number>();
+  for (const p of verifiedPayments) {
+    const name = p.payment_categories?.name ?? 'Uncategorised';
+    totalRevenueByCategory.set(name, (totalRevenueByCategory.get(name) ?? 0) + Number(p.amount ?? 0));
+  }
+  const totalRevenueBreakdown: BreakdownRow[] = Array.from(totalRevenueByCategory.entries())
+    .filter(([, amount]) => amount > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount]) => ({ label: name, value: `₹${amount.toLocaleString('en-IN')}` }));
 
   // Coach-wise summary (admin only) — coach identity is the sheet's own
   // "Renewal Coach" name, not the list of invited/logged-in accounts.
@@ -88,19 +151,33 @@ export default async function OverviewPage({
 
       <MonthTabs availableMonths={availableMonths} activeMonth={activeMonth} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <StatCard label="Total Leads" value={totalLeads} />
         <StatCard label="Contacted" value={contacted} accent="blue" />
         <StatCard label="Follow-ups Pending" value={followUpsPending} accent="amber" />
         <StatCard label="Interested" value={interested} accent="purple" />
         <StatCard label="Payment Pending" value={paymentPending} accent="amber" />
-        <StatCard label="Renewed" value={renewed} accent="green" />
+      </div>
+
+      <div className={`grid grid-cols-1 ${user.role === 'admin' ? 'md:grid-cols-3' : 'md:grid-cols-1 max-w-sm'} gap-4 mb-8`}>
+        <BreakdownStatCard label="Renewed" total={renewed} accent="green" breakdown={renewedBreakdown} />
         {user.role === 'admin' && (
-          <StatCard
-            label="Total Revenue"
-            value={`₹${totalRevenue.toLocaleString('en-IN')}`}
-            accent="green"
-          />
+          <>
+            <BreakdownStatCard
+              label="Careplan Revenue"
+              total={`₹${careplanRevenue.toLocaleString('en-IN')}`}
+              accent="purple"
+              breakdown={careplanRevenueBreakdown}
+              emptyText="No Careplan revenue this month"
+            />
+            <BreakdownStatCard
+              label="Total Revenue"
+              total={`₹${totalRevenue.toLocaleString('en-IN')}`}
+              accent="green"
+              breakdown={totalRevenueBreakdown}
+              emptyText="No verified revenue this month"
+            />
+          </>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 import { currentMonthCohort } from '@/lib/months';
 import MonthTabs from '@/components/MonthTabs';
 import StatCard from '@/components/StatCard';
+import BreakdownStatCard, { type BreakdownRow } from '@/components/BreakdownStatCard';
 import { findApplicableRule, calculateIncentive, findApplicableTiers, calculateTargetTierIncentive } from '@/lib/incentive';
 
 export default async function RevenuePage({
@@ -92,6 +93,44 @@ export default async function RevenuePage({
   const pendingPayments = allLeads.filter((l) => l.payment_status === 'Pending').length;
   const lostLeads = allLeads.filter((l) => ['Lost', 'Not Interested', 'Not Reachable'].includes(l.status)).length;
   const conversionRate = totalAssigned ? ((totalRenewals / totalAssigned) * 100).toFixed(1) : '0.0';
+
+  // Renewed / Revenue broken into Careplan (its 3 team variants, pooled) vs
+  // everything else — same split shown on the Overview page.
+  const careplanCategories = (allCategories ?? []).filter((c: any) => targetTieredCategoryIds.has(c.id));
+  const renewedLeadsThisMonth = allLeads.filter((l) => l.status === 'Renewed');
+  const careplanRenewedLeadIds = new Set(
+    payments.filter((p: any) => p.category_id && targetTieredCategoryIds.has(p.category_id)).map((p: any) => p.lead_id)
+  );
+  const careplanRenewedCount = renewedLeadsThisMonth.filter((l) => careplanRenewedLeadIds.has(l.id)).length;
+  const othersRenewedCount = renewedLeadsThisMonth.length - careplanRenewedCount;
+  const renewedBreakdown: BreakdownRow[] = [
+    { label: 'Careplan', value: String(careplanRenewedCount), emphasize: true },
+    ...careplanCategories
+      .map((c: any) => ({
+        label: c.name,
+        value: String(
+          renewedLeadsThisMonth.filter((l) =>
+            payments.some((p: any) => p.lead_id === l.id && p.category_id === c.id)
+          ).length
+        ),
+        indent: true,
+      }))
+      .filter((r) => r.value !== '0'),
+    { label: 'Others', value: String(othersRenewedCount), emphasize: true },
+  ];
+
+  const careplanRevenueTotal = payments
+    .filter((p: any) => p.category_id && targetTieredCategoryIds.has(p.category_id))
+    .reduce((sum: number, p: any) => sum + Number(p.amount ?? 0), 0);
+  const careplanRevenueBreakdown: BreakdownRow[] = careplanCategories
+    .map((c: any) => ({
+      label: c.name,
+      amount: payments
+        .filter((p: any) => p.category_id === c.id)
+        .reduce((sum: number, p: any) => sum + Number(p.amount ?? 0), 0),
+    }))
+    .filter((c) => c.amount > 0)
+    .map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }));
 
   const coachRows = coachNames.map((name) => {
     const theirLeads = allLeads.filter((l: any) => l.source_coach_name === name);
@@ -199,6 +238,11 @@ export default async function RevenuePage({
   // one correct combined incentive number lives only in the "Target
   // achievement" table below, computed once per group.
 
+  const totalRevenueBreakdown: BreakdownRow[] = categoryRows
+    .filter((r: any) => r.revenue > 0)
+    .sort((a: any, b: any) => b.revenue - a.revenue)
+    .map((r: any) => ({ label: r.name, value: `₹${r.revenue.toLocaleString('en-IN')}` }));
+
   return (
     <div>
       <h1 className="text-xl font-semibold text-slate-900 mb-1">Revenue &amp; Incentives</h1>
@@ -206,15 +250,31 @@ export default async function RevenuePage({
 
       <MonthTabs availableMonths={availableMonths} activeMonth={activeMonth} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
         <StatCard label="Total Assigned Leads" value={totalAssigned} />
-        <StatCard label="Total Renewals" value={totalRenewals} accent="green" />
-        <StatCard label="Total Revenue" value={`₹${totalRevenue.toLocaleString('en-IN')}`} accent="green" />
         <StatCard label="Renewal Conversion Rate" value={`${conversionRate}%`} accent="blue" />
         <StatCard label="Verified Transactions" value={payments.length} accent="purple" />
         <StatCard label="Pending Verification" value={pendingVerificationCount} accent="amber" />
         <StatCard label="Pending Payments" value={pendingPayments} accent="amber" />
         <StatCard label="Lost Leads" value={lostLeads} accent="red" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <BreakdownStatCard label="Total Renewals" total={totalRenewals} accent="green" breakdown={renewedBreakdown} />
+        <BreakdownStatCard
+          label="Careplan Revenue"
+          total={`₹${careplanRevenueTotal.toLocaleString('en-IN')}`}
+          accent="purple"
+          breakdown={careplanRevenueBreakdown}
+          emptyText="No Careplan revenue this month"
+        />
+        <BreakdownStatCard
+          label="Total Revenue"
+          total={`₹${totalRevenue.toLocaleString('en-IN')}`}
+          accent="green"
+          breakdown={totalRevenueBreakdown}
+          emptyText="No verified revenue this month"
+        />
       </div>
 
       <div className="card overflow-x-auto">
