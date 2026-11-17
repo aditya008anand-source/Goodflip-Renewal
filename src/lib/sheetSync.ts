@@ -6,6 +6,7 @@ export interface SyncResult {
   rowsAdded: number;
   rowsUpdated: number;
   rowsFlagged: number;
+  rowsDeactivated: number;
   errors: string[];
 }
 
@@ -20,7 +21,14 @@ export async function syncParsedLeadsToDatabase(
   supabase: SupabaseClient,
   leads: ParsedLead[]
 ): Promise<SyncResult> {
-  const result: SyncResult = { rowsSeen: 0, rowsAdded: 0, rowsUpdated: 0, rowsFlagged: 0, errors: [] };
+  const result: SyncResult = {
+    rowsSeen: 0,
+    rowsAdded: 0,
+    rowsUpdated: 0,
+    rowsFlagged: 0,
+    rowsDeactivated: 0,
+    errors: [],
+  };
 
   // Resolve source_coach_name -> coach_id against coaches that already have
   // an invited account, matching case-insensitively on display_name.
@@ -29,8 +37,17 @@ export async function syncParsedLeadsToDatabase(
     (coaches ?? []).map((c: any) => [c.display_name.trim().toLowerCase(), c.id])
   );
 
+  // Every (rowKey, monthCohort) seen in THIS sheet pull — used after the
+  // loop to find leads that used to exist for a month but have now
+  // disappeared from the sheet, so they can be soft-deleted (never a hard
+  // delete, which would cascade and wipe their call/payment history).
+  const seenKeys = new Set<string>();
+  const monthCohortsSeen = new Set<string>();
+
   for (const lead of leads) {
     result.rowsSeen += 1;
+    seenKeys.add(`${lead.rowKey}::${lead.monthCohort}`);
+    monthCohortsSeen.add(lead.monthCohort);
     try {
       const coachId = lead.sourceCoachName
         ? coachByName.get(lead.sourceCoachName.trim().toLowerCase()) ?? null
@@ -65,6 +82,10 @@ export async function syncParsedLeadsToDatabase(
           }
         }
         if (!existing.coach_id && coachId) updatePayload.coach_id = coachId;
+
+        // Reappeared after being soft-deleted on an earlier sync (removed
+        // from the sheet, then added back) — bring it back into every page.
+        if ((existing as any).active === false) updatePayload.active = true;
 
         // lead_master_status (sheet Column I: Active/Inactive/Nutra Order) is
         // different from the fields above — it's a live sheet value that can
@@ -137,6 +158,32 @@ export async function syncParsedLeadsToDatabase(
       }
     } catch (err: any) {
       result.errors.push(`${lead.patientName} (${lead.mobileNumber}): ${err.message}`);
+    }
+  }
+
+  // Soft-delete: for every month cohort this sheet pull touched, any
+  // currently-active lead whose (rowKey, monthCohort) was NOT seen in this
+  // pull has been removed from the sheet — deactivate it rather than
+  // deleting the row, so its call history and payment/revenue records stay
+  // intact for audit and nothing already-verified is lost.
+  for (const monthCohort of monthCohortsSeen) {
+    const { data: existingForMonth } = await supabase
+      .from('leads')
+      .select('id, source_row_key')
+      .eq('month_cohort', monthCohort)
+      .eq('active', true);
+
+    const idsToDeactivate = (existingForMonth ?? [])
+      .filter((l) => !seenKeys.has(`${l.source_row_key}::${monthCohort}`))
+      .map((l) => l.id);
+
+    if (idsToDeactivate.length > 0) {
+      const { error: deactivateError } = await supabase
+        .from('leads')
+        .update({ active: false })
+        .in('id', idsToDeactivate);
+      if (deactivateError) result.errors.push(deactivateError.message);
+      else result.rowsDeactivated += idsToDeactivate.length;
     }
   }
 

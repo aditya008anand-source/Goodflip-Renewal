@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       rows_added: result.rowsAdded,
       rows_updated: result.rowsUpdated,
       rows_flagged: result.rowsFlagged,
+      rows_deactivated: result.rowsDeactivated,
       error_message: result.errors.length ? result.errors.slice(0, 20).join('\n') : null,
     });
 

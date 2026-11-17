@@ -28,6 +28,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
     .from('lead_overview')
     .select('id, patient_name, mobile_number, status, plan_expiry_date')
     .eq('month_cohort', lead.month_cohort)
+    .eq('active', true)
     .order('plan_expiry_date', { ascending: true });
 
   const { data: categories } = await supabase
@@ -103,6 +104,13 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
             </div>
             <PriorityBadge priority={lead.priority} />
           </div>
+
+          {lead.active === false && (
+            <div className="mt-3 rounded-md bg-slate-100 border border-slate-200 px-3 py-2 text-xs text-slate-600">
+              This lead was removed from the source sheet on a later sync, so it no longer
+              appears in any list — its history below is kept for reference.
+            </div>
+          )}
 
           {lead.needs_review && (
             <div className="mt-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">

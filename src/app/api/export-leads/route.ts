@@ -25,14 +25,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'month is required' }, { status: 400 });
   }
 
-  let query = supabase.from('lead_overview').select('*').eq('month_cohort', month);
+  let query = supabase.from('lead_overview').select('*').eq('month_cohort', month).eq('active', true);
   const coach = params.get('coach');
-  if (coach === 'unassigned') query = query.is('coach_id', null);
-  else if (coach) query = query.eq('coach_id', coach);
+  if (coach === 'unassigned') query = query.is('source_coach_name', null);
+  else if (coach) query = query.eq('source_coach_name', coach);
   const status = params.get('status');
   if (status) query = query.eq('status', status);
   const priority = params.get('priority');
   if (priority) query = query.eq('priority', priority);
+  const payment = params.get('payment');
+  if (payment === 'Pending') query = query.eq('latest_payment_status', 'Pending');
+  else if (payment === 'Paid_unverified')
+    query = query.eq('latest_payment_status', 'Paid').eq('latest_verification_status', 'pending');
+  else if (payment === 'Paid_verified')
+    query = query.eq('latest_payment_status', 'Paid').eq('latest_verification_status', 'verified');
+  else if (payment === 'Paid_rejected')
+    query = query.eq('latest_payment_status', 'Paid').eq('latest_verification_status', 'rejected');
   const expiryFrom = params.get('expiry_from');
   if (expiryFrom) query = query.gte('plan_expiry_date', expiryFrom);
   const expiryTo = params.get('expiry_to');
@@ -119,7 +127,7 @@ export async function GET(request: NextRequest) {
     return [
       lead.patient_name,
       lead.mobile_number,
-      lead.coach_name ?? '',
+      lead.source_coach_name ?? '',
       lead.programme ?? '',
       lead.plan_expiry_date ?? '',
       lead.status,

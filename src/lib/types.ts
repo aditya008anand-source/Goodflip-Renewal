@@ -61,6 +61,7 @@ export interface Lead {
   source_row_key: string | null; // dedup/sync key (mobile number, or mobile+name on collision)
   needs_review: boolean; // flagged during import/sync when data was ambiguous
   review_note: string | null;
+  active: boolean; // false = removed from the source sheet on a later sync (soft-deleted, history kept)
   created_at: string;
   updated_at: string;
 }
@@ -153,6 +154,7 @@ export interface SyncLog {
   rows_added: number;
   rows_updated: number;
   rows_flagged: number;
+  rows_deactivated: number;
   error_message: string | null;
   run_at: string;
 }

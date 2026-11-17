@@ -16,6 +16,7 @@ export default async function OverviewPage({
   const { data: monthRows } = await supabase
     .from('leads')
     .select('month_cohort')
+    .eq('active', true)
     .order('month_cohort', { ascending: false });
 
   const availableMonths = Array.from(
@@ -25,7 +26,7 @@ export default async function OverviewPage({
 
   const activeMonth = searchParams.month ?? availableMonths[0];
 
-  let query = supabase.from('leads').select('*').eq('month_cohort', activeMonth);
+  let query = supabase.from('leads').select('*').eq('month_cohort', activeMonth).eq('active', true);
   const { data: leads } = await query;
   const allLeads = leads ?? [];
 
@@ -38,26 +39,40 @@ export default async function OverviewPage({
   const paymentPending = allLeads.filter((l) => l.payment_status === 'Pending' && l.status !== 'Lost').length;
   const renewed = allLeads.filter((l) => l.status === 'Renewed').length;
 
+  // Only VERIFIED payments count as revenue — matches the Revenue page
+  // exactly (previously this counted every payments.status === 'Paid' row
+  // regardless of verification, which inflated this number versus Revenue).
   let totalRevenue = 0;
+  let verifiedPayments: { amount: number | null; lead_id: string }[] = [];
   if (user.role === 'admin' && allLeads.length > 0) {
     const { data: payments } = await supabase
       .from('payments')
-      .select('amount, status, lead_id')
+      .select('amount, lead_id')
       .eq('status', 'Paid')
+      .eq('verification_status', 'verified')
       .in('lead_id', allLeads.map((l) => l.id));
-    totalRevenue = (payments ?? []).reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+    verifiedPayments = payments ?? [];
+    totalRevenue = verifiedPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   }
 
-  // Coach-wise summary (admin only)
-  let coachSummary: { name: string; assigned: number; renewed: number }[] = [];
+  // Coach-wise summary (admin only) — coach identity is the sheet's own
+  // "Renewal Coach" name, not the list of invited/logged-in accounts.
+  let coachSummary: { name: string; assigned: number; renewed: number; revenue: number }[] = [];
   if (user.role === 'admin') {
-    const { data: coaches } = await supabase.from('coaches').select('id, display_name');
-    coachSummary = (coaches ?? []).map((c) => {
-      const theirLeads = allLeads.filter((l) => l.coach_id === c.id);
+    const coachNames = Array.from(
+      new Set(allLeads.map((l: any) => l.source_coach_name).filter((n: string | null): n is string => !!n))
+    ).sort();
+    coachSummary = coachNames.map((name) => {
+      const theirLeads = allLeads.filter((l: any) => l.source_coach_name === name);
+      const theirLeadIds = new Set(theirLeads.map((l) => l.id));
+      const revenue = verifiedPayments
+        .filter((p) => theirLeadIds.has(p.lead_id))
+        .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
       return {
-        name: c.display_name,
+        name,
         assigned: theirLeads.length,
         renewed: theirLeads.filter((l) => l.status === 'Renewed').length,
+        revenue,
       };
     });
   }
@@ -99,6 +114,7 @@ export default async function OverviewPage({
                 <th>Assigned Leads</th>
                 <th>Renewals</th>
                 <th>Conversion %</th>
+                <th>Revenue</th>
               </tr>
             </thead>
             <tbody>
@@ -108,6 +124,7 @@ export default async function OverviewPage({
                   <td>{c.assigned}</td>
                   <td>{c.renewed}</td>
                   <td>{c.assigned ? ((c.renewed / c.assigned) * 100).toFixed(1) : '0.0'}%</td>
+                  <td>₹{c.revenue.toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>

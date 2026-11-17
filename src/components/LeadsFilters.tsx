@@ -5,10 +5,10 @@ import { useState, useTransition } from 'react';
 import { LEAD_STATUSES } from '@/lib/types';
 
 export default function LeadsFilters({
-  coaches,
+  coachNames,
   isAdmin,
 }: {
-  coaches: { id: string; display_name: string }[];
+  coachNames: string[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -75,9 +75,9 @@ export default function LeadsFilters({
           >
             <option value="">All Coaches</option>
             <option value="unassigned">Unassigned</option>
-            {coaches.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.display_name}
+            {coachNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
@@ -105,6 +105,18 @@ export default function LeadsFilters({
           <option value="High">High</option>
           <option value="Medium">Medium</option>
           <option value="Low">Low</option>
+        </select>
+
+        <select
+          className="input"
+          defaultValue={searchParams.get('payment') ?? ''}
+          onChange={(e) => update('payment', e.target.value)}
+        >
+          <option value="">All Payment Statuses</option>
+          <option value="Pending">Payment Pending</option>
+          <option value="Paid_unverified">Paid — Pending Verification</option>
+          <option value="Paid_verified">Paid — Verified</option>
+          <option value="Paid_rejected">Paid — Rejected</option>
         </select>
 
         <div className="flex gap-1 items-center col-span-2">

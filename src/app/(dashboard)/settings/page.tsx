@@ -62,13 +62,16 @@ export default async function SettingsPage() {
         <p className="text-xs text-slate-500 mb-3">
           Pulls new/changed rows from the published November sheet. Existing comments, payment
           records and call history are never overwritten — only master fields (name, programme,
-          expiry date, etc.) are refreshed for leads that already exist.
+          expiry date, etc.) are refreshed for leads that already exist. A lead that disappears
+          from the sheet is removed from every list in the portal, but its history and any
+          verified payment are kept (never deleted) — it comes back automatically if it
+          reappears in a later sync.
         </p>
         <div className="flex items-center gap-4">
           <SyncButton />
           <p className="text-xs text-slate-500">
             {lastSync
-              ? `Last sync: ${format(new Date(lastSync.run_at), 'dd MMM yyyy, h:mm a')} — ${lastSync.status} (${lastSync.rows_added} added, ${lastSync.rows_updated} updated, ${lastSync.rows_flagged} flagged)`
+              ? `Last sync: ${format(new Date(lastSync.run_at), 'dd MMM yyyy, h:mm a')} — ${lastSync.status} (${lastSync.rows_added} added, ${lastSync.rows_updated} updated, ${lastSync.rows_flagged} flagged, ${lastSync.rows_deactivated ?? 0} removed from sheet)`
               : 'No sync has run yet.'}
           </p>
         </div>

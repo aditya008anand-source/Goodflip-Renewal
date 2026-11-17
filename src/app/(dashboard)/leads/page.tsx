@@ -19,25 +19,45 @@ export default async function LeadsPage({
   const { data: monthRows } = await supabase
     .from('leads')
     .select('month_cohort')
+    .eq('active', true)
     .order('month_cohort', { ascending: false });
   const availableMonths = Array.from(new Set((monthRows ?? []).map((r) => r.month_cohort)));
   if (availableMonths.length === 0) availableMonths.push(currentMonthCohort());
   const activeMonth = searchParams.month ?? availableMonths[0];
 
-  const { data: coaches } = await supabase
-    .from('coaches')
-    .select('id, display_name')
-    .order('display_name');
+  // Coach list is the sheet's own "Renewal Coach" names, not the list of
+  // who has been invited/has a login — a coach with leads in the sheet but
+  // no portal account yet still needs to show up here.
+  const { data: coachNameRows } = await supabase
+    .from('leads')
+    .select('source_coach_name')
+    .not('source_coach_name', 'is', null);
+  const coachNames = Array.from(
+    new Set((coachNameRows ?? []).map((r) => r.source_coach_name as string))
+  ).sort();
 
-  let query = supabase.from('lead_overview').select('*').eq('month_cohort', activeMonth);
+  let query = supabase
+    .from('lead_overview')
+    .select('*')
+    .eq('month_cohort', activeMonth)
+    .eq('active', true);
 
   if (searchParams.coach === 'unassigned') {
-    query = query.is('coach_id', null);
+    query = query.is('source_coach_name', null);
   } else if (searchParams.coach) {
-    query = query.eq('coach_id', searchParams.coach);
+    query = query.eq('source_coach_name', searchParams.coach);
   }
   if (searchParams.status) query = query.eq('status', searchParams.status);
   if (searchParams.priority) query = query.eq('priority', searchParams.priority);
+  if (searchParams.payment === 'Pending') {
+    query = query.eq('latest_payment_status', 'Pending');
+  } else if (searchParams.payment === 'Paid_unverified') {
+    query = query.eq('latest_payment_status', 'Paid').eq('latest_verification_status', 'pending');
+  } else if (searchParams.payment === 'Paid_verified') {
+    query = query.eq('latest_payment_status', 'Paid').eq('latest_verification_status', 'verified');
+  } else if (searchParams.payment === 'Paid_rejected') {
+    query = query.eq('latest_payment_status', 'Paid').eq('latest_verification_status', 'rejected');
+  }
   if (searchParams.expiry_from) query = query.gte('plan_expiry_date', searchParams.expiry_from);
   if (searchParams.expiry_to) query = query.lte('plan_expiry_date', searchParams.expiry_to);
   if (searchParams.followup_from) query = query.gte('next_followup_date', searchParams.followup_from);
@@ -65,7 +85,7 @@ export default async function LeadsPage({
 
       <MonthTabs availableMonths={availableMonths} activeMonth={activeMonth} />
 
-      <LeadsFilters coaches={coaches ?? []} isAdmin={user.role === 'admin'} />
+      <LeadsFilters coachNames={coachNames} isAdmin={user.role === 'admin'} />
 
       <div className="card overflow-x-auto">
         {error && <p className="text-sm text-red-600 mb-2">{error.message}</p>}
@@ -92,7 +112,7 @@ export default async function LeadsPage({
               <tr key={lead.id} className="hover:bg-slate-50">
                 <td className="font-medium text-slate-800">{lead.patient_name}</td>
                 <td>{lead.mobile_number}</td>
-                {user.role === 'admin' && <td>{lead.coach_name ?? '—'}</td>}
+                {user.role === 'admin' && <td>{lead.source_coach_name ?? '—'}</td>}
                 <td className="text-slate-600">{lead.programme ?? '—'}</td>
                 <td>
                   {lead.plan_expiry_date ? format(new Date(lead.plan_expiry_date), 'dd MMM yyyy') : '—'}
@@ -121,7 +141,12 @@ export default async function LeadsPage({
                     ? format(new Date(lead.next_followup_date), 'dd MMM')
                     : '—'}
                 </td>
-                <td>{lead.latest_payment_status}</td>
+                <td>
+                  {lead.latest_payment_status}
+                  {lead.latest_payment_status === 'Paid' && lead.latest_verification_status && (
+                    <span className="text-xs text-slate-400"> ({lead.latest_verification_status})</span>
+                  )}
+                </td>
                 <td>
                   <Link href={`/leads/${lead.id}`} className="text-brand-700 font-medium text-xs">
                     View Details

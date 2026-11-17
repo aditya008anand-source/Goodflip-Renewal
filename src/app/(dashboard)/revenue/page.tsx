@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { requireAdmin } from '@/lib/auth';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { currentMonthCohort } from '@/lib/months';
@@ -16,16 +17,28 @@ export default async function RevenuePage({
   const { data: monthRows } = await supabase
     .from('leads')
     .select('month_cohort')
+    .eq('active', true)
     .order('month_cohort', { ascending: false });
   const availableMonths = Array.from(new Set((monthRows ?? []).map((r) => r.month_cohort)));
   if (availableMonths.length === 0) availableMonths.push(currentMonthCohort());
   const activeMonth = searchParams.month ?? availableMonths[0];
 
-  let leadsQuery = supabase.from('leads').select('*, coaches(id, display_name)').eq('month_cohort', activeMonth);
-  if (searchParams.coach) leadsQuery = leadsQuery.eq('coach_id', searchParams.coach);
+  let leadsQuery = supabase
+    .from('leads')
+    .select('*')
+    .eq('month_cohort', activeMonth)
+    .eq('active', true);
+  if (searchParams.coach) leadsQuery = leadsQuery.eq('source_coach_name', searchParams.coach);
   if (searchParams.programme) leadsQuery = leadsQuery.eq('programme', searchParams.programme);
   const { data: leads } = await leadsQuery;
   const allLeads = leads ?? [];
+
+  // Coach identity here is the sheet's own "Renewal Coach" name, not the
+  // list of invited/logged-in accounts — a coach with leads this month but
+  // no portal account yet still gets a row.
+  const coachNames = Array.from(
+    new Set(allLeads.map((l: any) => l.source_coach_name).filter((n: string | null): n is string => !!n))
+  ).sort();
 
   const { data: allPayments } = await supabase
     .from('payments')
@@ -42,7 +55,6 @@ export default async function RevenuePage({
   ).length;
 
   const { data: incentiveRules } = await supabase.from('incentive_settings').select('*');
-  const { data: coaches } = await supabase.from('coaches').select('id, display_name').order('display_name');
   const { data: allCategories } = await supabase.from('payment_categories').select('*');
   const { data: targetTiers } = await supabase.from('incentive_target_tiers').select('*');
 
@@ -61,8 +73,8 @@ export default async function RevenuePage({
   const lostLeads = allLeads.filter((l) => ['Lost', 'Not Interested', 'Not Reachable'].includes(l.status)).length;
   const conversionRate = totalAssigned ? ((totalRenewals / totalAssigned) * 100).toFixed(1) : '0.0';
 
-  const coachRows = (coaches ?? []).map((coach) => {
-    const theirLeads = allLeads.filter((l) => l.coach_id === coach.id);
+  const coachRows = coachNames.map((name) => {
+    const theirLeads = allLeads.filter((l: any) => l.source_coach_name === name);
     const theirPayments = (payments ?? []).filter((p) =>
       theirLeads.some((l) => l.id === p.lead_id)
     );
@@ -122,7 +134,7 @@ export default async function RevenuePage({
     }
 
     return {
-      coach: coach.display_name,
+      coach: name,
       assigned: theirLeads.length,
       renewals,
       conversion: theirLeads.length ? ((renewals / theirLeads.length) * 100).toFixed(1) : '0.0',
@@ -244,48 +256,60 @@ export default async function RevenuePage({
         </table>
       </div>
 
-      {coachRows.some((r) => r.targetBreakdown.length > 0) && (
-        <div className="card overflow-x-auto mt-6">
-          <h2 className="text-sm font-semibold text-slate-800 mb-3">Target achievement</h2>
-          <table className="table-base">
-            <thead>
-              <tr>
-                <th>Coach</th>
-                <th>Category</th>
-                <th className="text-right">Active Leads</th>
-                <th className="text-right">Converted</th>
-                <th className="text-right">Achieved</th>
-                <th className="text-right">Tier Rate</th>
-                <th className="text-right">Incentive</th>
-              </tr>
-            </thead>
-            <tbody>
-              {coachRows.flatMap((r) =>
-                r.targetBreakdown.map((tb) => (
-                  <tr key={`${r.coach}-${tb.category}`}>
-                    <td className="font-medium text-slate-700">{r.coach}</td>
-                    <td className="text-slate-600">{tb.category}</td>
-                    <td className="text-right">{tb.activeLeads}</td>
-                    <td className="text-right">{tb.converted}</td>
-                    <td className="text-right">
-                      {tb.targetType === 'count' ? tb.achievedValue : `${tb.achievedValue.toFixed(1)}%`}
-                    </td>
-                    <td className="text-right">{tb.rate}%</td>
-                    <td className="text-right font-medium text-brand-700">
-                      ₹{tb.incentive.toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          <p className="text-xs text-slate-400 mt-3">
-            Coaches with 0 Active leads this month aren&apos;t shown here — there&apos;s nothing to
-            divide by. Active/Inactive comes from the sheet&apos;s own Column I, separate from the
-            portal&apos;s workflow status.
-          </p>
-        </div>
-      )}
+      {coachRows.some((r) => r.targetBreakdown.length > 0) && (() => {
+        const targetCategories = (allCategories ?? []).filter((c) => c.incentive_mode === 'target_tiered');
+        return (
+          <div className="card overflow-x-auto mt-6">
+            <h2 className="text-sm font-semibold text-slate-800 mb-3">Target achievement</h2>
+            <table className="table-base">
+              <thead>
+                <tr>
+                  <th>Coach</th>
+                  {targetCategories.map((c) => (
+                    <Fragment key={c.id}>
+                      <th className="text-right">{c.name} — Achieved</th>
+                      <th className="text-right">{c.name} — Tier Rate</th>
+                      <th className="text-right">{c.name} — Incentive</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {coachRows
+                  .filter((r) => r.targetBreakdown.length > 0)
+                  .map((r) => (
+                    <tr key={r.coach}>
+                      <td className="font-medium text-slate-700">{r.coach}</td>
+                      {targetCategories.map((c) => {
+                        const tb = r.targetBreakdown.find((t) => t.category === c.name);
+                        return (
+                          <Fragment key={c.id}>
+                            <td className="text-right">
+                              {tb
+                                ? `${
+                                    tb.targetType === 'count' ? tb.achievedValue : `${tb.achievedValue.toFixed(1)}%`
+                                  } (${tb.converted}/${tb.activeLeads})`
+                                : '—'}
+                            </td>
+                            <td className="text-right">{tb ? `${tb.rate}%` : '—'}</td>
+                            <td className="text-right font-medium text-brand-700">
+                              {tb ? `₹${tb.incentive.toLocaleString('en-IN')}` : '—'}
+                            </td>
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            <p className="text-xs text-slate-400 mt-3">
+              A coach with 0 Active leads this month shows &quot;—&quot; for a % ladder category —
+              there&apos;s nothing to divide by. Active/Inactive comes from the sheet&apos;s own
+              Column I, separate from the portal&apos;s workflow status.
+            </p>
+          </div>
+        );
+      })()}
     </div>
   );
 }
