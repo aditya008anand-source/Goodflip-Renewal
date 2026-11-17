@@ -40,30 +40,34 @@ export default async function OverviewPage({
   const paymentPending = allLeads.filter((l) => l.payment_status === 'Pending' && l.status !== 'Lost').length;
   const renewed = allLeads.filter((l) => l.status === 'Renewed').length;
 
-  // Only VERIFIED payments count as revenue — matches the Revenue page
-  // exactly (previously this counted every payments.status === 'Paid' row
-  // regardless of verification, which inflated this number versus Revenue).
-  let totalRevenue = 0;
-  let verifiedPayments: {
+  // Revenue (₹) only ever counts VERIFIED payments — matches the Revenue
+  // page exactly. But "is this renewal a Careplan renewal or something
+  // else" is a question about the payment's CATEGORY, not whether it's
+  // been verified yet — a Careplan payment sitting in "pending
+  // verification" is still a Careplan renewal, just not counted in revenue
+  // until verified. So we fetch every Paid payment (any verification
+  // status) for classification, and keep a verified-only subset for ₹.
+  let allPayments: {
     amount: number | null;
     lead_id: string;
     category_id: string | null;
+    verification_status: string | null;
     payment_categories: { name: string } | null;
   }[] = [];
   let categories: { id: string; name: string; target_group: string | null }[] = [];
   if (user.role === 'admin' && allLeads.length > 0) {
-    const { data: payments } = await supabase
+    const { data: paymentRows } = await supabase
       .from('payments')
-      .select('amount, lead_id, category_id, payment_categories(name)')
+      .select('amount, lead_id, category_id, verification_status, payment_categories(name)')
       .eq('status', 'Paid')
-      .eq('verification_status', 'verified')
       .in('lead_id', allLeads.map((l) => l.id));
-    verifiedPayments = (payments ?? []) as any;
-    totalRevenue = verifiedPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+    allPayments = (paymentRows ?? []) as any;
 
     const { data: cats } = await supabase.from('payment_categories').select('id, name, target_group');
     categories = cats ?? [];
   }
+  const verifiedPayments = allPayments.filter((p) => p.verification_status === 'verified');
+  const totalRevenue = verifiedPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
 
   // Careplan group (its 3 team variants, pooled by target_group — see
   // migration-9) vs every other category, for the Renewed / Revenue
@@ -71,42 +75,49 @@ export default async function OverviewPage({
   const careplanCategories = categories.filter((c) => c.target_group === 'careplan');
   const careplanCategoryIds = new Set(careplanCategories.map((c) => c.id));
 
+  // Classification uses EVERY Paid payment regardless of verification —
+  // only the ₹ amounts below are verified-only.
   const renewedLeads = allLeads.filter((l) => l.status === 'Renewed');
   const careplanRenewedLeadIds = new Set(
-    verifiedPayments
-      .filter((p) => p.category_id && careplanCategoryIds.has(p.category_id))
-      .map((p) => p.lead_id)
+    allPayments.filter((p) => p.category_id && careplanCategoryIds.has(p.category_id)).map((p) => p.lead_id)
   );
   const careplanRenewedCount = renewedLeads.filter((l) => careplanRenewedLeadIds.has(l.id)).length;
   const othersRenewedCount = renewedLeads.length - careplanRenewedCount;
+  const careplanRenewedSubCounts = careplanCategories
+    .map((c) => ({
+      label: c.name,
+      count: renewedLeads.filter((l) => allPayments.some((p) => p.lead_id === l.id && p.category_id === c.id))
+        .length,
+    }))
+    .filter((c) => c.count > 0);
   const renewedBreakdown: BreakdownRow[] = [
     { label: 'Careplan', value: String(careplanRenewedCount), emphasize: true },
-    ...careplanCategories
-      .map((c) => ({
-        label: c.name,
-        value: String(
-          renewedLeads.filter((l) =>
-            verifiedPayments.some((p) => p.lead_id === l.id && p.category_id === c.id)
-          ).length
-        ),
-        indent: true,
-      }))
-      .filter((r) => r.value !== '0'),
+    // Only show the Careplan sub-category split when more than one of its
+    // 3 team variants actually has a renewal this month — with just one
+    // active, the sub-row would just repeat the "Careplan" line above it.
+    ...(careplanRenewedSubCounts.length > 1
+      ? careplanRenewedSubCounts.map((c) => ({ label: c.label, value: String(c.count), indent: true }))
+      : []),
     { label: 'Others', value: String(othersRenewedCount), emphasize: true },
   ];
 
   const careplanRevenue = verifiedPayments
     .filter((p) => p.category_id && careplanCategoryIds.has(p.category_id))
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
-  const careplanRevenueBreakdown: BreakdownRow[] = careplanCategories
+  const careplanRevenueSubRows = careplanCategories
     .map((c) => ({
       label: c.name,
       amount: verifiedPayments
         .filter((p) => p.category_id === c.id)
         .reduce((sum, p) => sum + Number(p.amount ?? 0), 0),
     }))
-    .filter((c) => c.amount > 0)
-    .map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }));
+    .filter((c) => c.amount > 0);
+  // Same rule as Renewed above: only break Careplan Revenue down by its 3
+  // team variants when 2+ of them have verified revenue this month.
+  const careplanRevenueBreakdown: BreakdownRow[] =
+    careplanRevenueSubRows.length > 1
+      ? careplanRevenueSubRows.map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }))
+      : [];
 
   const totalRevenueByCategory = new Map<string, number>();
   for (const p of verifiedPayments) {
@@ -168,7 +179,7 @@ export default async function OverviewPage({
               total={`₹${careplanRevenue.toLocaleString('en-IN')}`}
               accent="purple"
               breakdown={careplanRevenueBreakdown}
-              emptyText="No Careplan revenue this month"
+              emptyText={careplanRevenue === 0 ? 'No Careplan revenue this month' : undefined}
             />
             <BreakdownStatCard
               label="Total Revenue"

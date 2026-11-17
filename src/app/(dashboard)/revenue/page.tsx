@@ -95,42 +95,56 @@ export default async function RevenuePage({
   const conversionRate = totalAssigned ? ((totalRenewals / totalAssigned) * 100).toFixed(1) : '0.0';
 
   // Renewed / Revenue broken into Careplan (its 3 team variants, pooled) vs
-  // everything else — same split shown on the Overview page.
+  // everything else — same split shown on the Overview page. Classification
+  // ("is this a Careplan renewal?") uses EVERY Paid payment regardless of
+  // verification — a Careplan payment awaiting verification is still a
+  // Careplan renewal, just not counted in ₹ until verified. Only the ₹
+  // amounts below use `payments` (verified-only).
   const careplanCategories = (allCategories ?? []).filter((c: any) => targetTieredCategoryIds.has(c.id));
   const renewedLeadsThisMonth = allLeads.filter((l) => l.status === 'Renewed');
   const careplanRenewedLeadIds = new Set(
-    payments.filter((p: any) => p.category_id && targetTieredCategoryIds.has(p.category_id)).map((p: any) => p.lead_id)
+    (allPayments ?? [])
+      .filter((p: any) => p.category_id && targetTieredCategoryIds.has(p.category_id))
+      .map((p: any) => p.lead_id)
   );
   const careplanRenewedCount = renewedLeadsThisMonth.filter((l) => careplanRenewedLeadIds.has(l.id)).length;
   const othersRenewedCount = renewedLeadsThisMonth.length - careplanRenewedCount;
+  const careplanRenewedSubCounts = careplanCategories
+    .map((c: any) => ({
+      label: c.name,
+      count: renewedLeadsThisMonth.filter((l) =>
+        (allPayments ?? []).some((p: any) => p.lead_id === l.id && p.category_id === c.id)
+      ).length,
+    }))
+    .filter((c) => c.count > 0);
   const renewedBreakdown: BreakdownRow[] = [
     { label: 'Careplan', value: String(careplanRenewedCount), emphasize: true },
-    ...careplanCategories
-      .map((c: any) => ({
-        label: c.name,
-        value: String(
-          renewedLeadsThisMonth.filter((l) =>
-            payments.some((p: any) => p.lead_id === l.id && p.category_id === c.id)
-          ).length
-        ),
-        indent: true,
-      }))
-      .filter((r) => r.value !== '0'),
+    // Only show the 3-way Careplan split when 2+ of its team variants
+    // actually have a renewal this month — with just one active, the
+    // sub-row would just repeat the "Careplan" line above it.
+    ...(careplanRenewedSubCounts.length > 1
+      ? careplanRenewedSubCounts.map((c) => ({ label: c.label, value: String(c.count), indent: true }))
+      : []),
     { label: 'Others', value: String(othersRenewedCount), emphasize: true },
   ];
 
   const careplanRevenueTotal = payments
     .filter((p: any) => p.category_id && targetTieredCategoryIds.has(p.category_id))
     .reduce((sum: number, p: any) => sum + Number(p.amount ?? 0), 0);
-  const careplanRevenueBreakdown: BreakdownRow[] = careplanCategories
+  const careplanRevenueSubRows = careplanCategories
     .map((c: any) => ({
       label: c.name,
       amount: payments
         .filter((p: any) => p.category_id === c.id)
         .reduce((sum: number, p: any) => sum + Number(p.amount ?? 0), 0),
     }))
-    .filter((c) => c.amount > 0)
-    .map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }));
+    .filter((c) => c.amount > 0);
+  // Same rule as Renewed above: only break Careplan Revenue down by its 3
+  // team variants when 2+ of them have verified revenue this month.
+  const careplanRevenueBreakdown: BreakdownRow[] =
+    careplanRevenueSubRows.length > 1
+      ? careplanRevenueSubRows.map((c) => ({ label: c.label, value: `₹${c.amount.toLocaleString('en-IN')}` }))
+      : [];
 
   // For the Coach-wise Detailed Report below: the 4 simple_percentage
   // categories get their own revenue/incentive columns, looked up by name
@@ -325,7 +339,7 @@ export default async function RevenuePage({
           total={`₹${careplanRevenueTotal.toLocaleString('en-IN')}`}
           accent="purple"
           breakdown={careplanRevenueBreakdown}
-          emptyText="No Careplan revenue this month"
+          emptyText={careplanRevenueTotal === 0 ? 'No Careplan revenue this month' : undefined}
         />
         <BreakdownStatCard
           label="Total Revenue"
