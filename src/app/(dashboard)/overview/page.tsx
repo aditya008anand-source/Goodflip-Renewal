@@ -82,7 +82,8 @@ export default async function OverviewPage({
     allPayments.filter((p) => p.category_id && careplanCategoryIds.has(p.category_id)).map((p) => p.lead_id)
   );
   const careplanRenewedCount = renewedLeads.filter((l) => careplanRenewedLeadIds.has(l.id)).length;
-  const othersRenewedCount = renewedLeads.length - careplanRenewedCount;
+  const othersRenewedLeads = renewedLeads.filter((l) => !careplanRenewedLeadIds.has(l.id));
+  const othersRenewedCount = othersRenewedLeads.length;
   const careplanRenewedSubCounts = careplanCategories
     .map((c) => ({
       label: c.name,
@@ -90,6 +91,22 @@ export default async function OverviewPage({
         .length,
     }))
     .filter((c) => c.count > 0);
+
+  // What "Others" is actually made of: every non-Careplan category that has
+  // a renewal this month (Nutra/CGM/BCA/Medicine/...), plus however many of
+  // those renewed leads have no payment record at all yet.
+  const otherCategories = categories.filter((c) => !careplanCategoryIds.has(c.id));
+  const othersSubCounts = otherCategories
+    .map((c) => ({
+      label: c.name,
+      count: othersRenewedLeads.filter((l) => allPayments.some((p) => p.lead_id === l.id && p.category_id === c.id))
+        .length,
+    }))
+    .filter((c) => c.count > 0);
+  const othersNoPaymentCount = othersRenewedLeads.filter(
+    (l) => !allPayments.some((p) => p.lead_id === l.id)
+  ).length;
+
   const renewedBreakdown: BreakdownRow[] = [
     { label: 'Careplan', value: String(careplanRenewedCount), emphasize: true },
     // Only show the Careplan sub-category split when more than one of its
@@ -99,6 +116,10 @@ export default async function OverviewPage({
       ? careplanRenewedSubCounts.map((c) => ({ label: c.label, value: String(c.count), indent: true }))
       : []),
     { label: 'Others', value: String(othersRenewedCount), emphasize: true },
+    ...othersSubCounts.map((c) => ({ label: c.label, value: String(c.count), indent: true })),
+    ...(othersNoPaymentCount > 0
+      ? [{ label: 'No payment recorded', value: String(othersNoPaymentCount), indent: true }]
+      : []),
   ];
 
   const careplanRevenue = verifiedPayments
