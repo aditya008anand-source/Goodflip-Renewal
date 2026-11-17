@@ -37,6 +37,15 @@ export async function syncParsedLeadsToDatabase(
     (coaches ?? []).map((c: any) => [c.display_name.trim().toLowerCase(), c.id])
   );
 
+  // Resolve a migrated payment's category from sheet column Q (Renewed
+  // Plan), matched case-insensitively against payment_categories.name. Only
+  // an exact (trimmed, lowercased) match sets category_id — anything blank
+  // or unrecognised is left uncategorised, exactly as before this change.
+  const { data: categories } = await supabase.from('payment_categories').select('id, name');
+  const categoryByName = new Map(
+    (categories ?? []).map((c: any) => [c.name.trim().toLowerCase(), c.id])
+  );
+
   // Every (rowKey, monthCohort) seen in THIS sheet pull — used after the
   // loop to find leads that used to exist for a month but have now
   // disappeared from the sheet, so they can be soft-deleted (never a hard
@@ -143,10 +152,14 @@ export async function syncParsedLeadsToDatabase(
       }
 
       if (lead.payment) {
+        const categoryId = lead.payment.categoryName
+          ? categoryByName.get(lead.payment.categoryName.trim().toLowerCase()) ?? null
+          : null;
         const { error: paymentError } = await supabase.from('payments').insert({
           lead_id: inserted.id,
           status: 'Paid',
           amount: lead.payment.amount,
+          category_id: categoryId,
           remarks: lead.payment.note
             ? `Migrated from source sheet. Renewed plan: ${lead.payment.note}`
             : 'Migrated from source sheet.',

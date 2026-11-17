@@ -91,7 +91,7 @@ export interface ParsedLead {
   needsReview: boolean;
   reviewNote: string | null;
   attempts: ParsedAttempt[];
-  payment: { amount: number; note: string | null } | null;
+  payment: { amount: number; note: string | null; categoryName: string | null } | null;
   rowKey: string; // dedup key for this row
   monthCohort: string; // 'YYYY-MM' — derived per-row from Plan Expiry Date, not passed in globally
 }
@@ -170,6 +170,7 @@ export function parseSheetRows(
           ? {
               amount: Number(paymentAmountRaw),
               note: row[COL.renewedPlan]?.trim() || null,
+              categoryName: row[COL.renewedPlan]?.trim() || null,
             }
           : null;
 
