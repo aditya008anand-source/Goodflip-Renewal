@@ -5,6 +5,7 @@ import { currentMonthCohort } from '@/lib/months';
 import MonthTabs from '@/components/MonthTabs';
 import StatCard from '@/components/StatCard';
 import BreakdownStatCard, { type BreakdownRow } from '@/components/BreakdownStatCard';
+import ExportCoachReportButton from '@/components/forms/ExportCoachReportButton';
 import { findApplicableRule, calculateIncentive, findApplicableTiers, calculateTargetTierIncentive } from '@/lib/incentive';
 
 export default async function RevenuePage({
@@ -474,7 +475,30 @@ export default async function RevenuePage({
       })()}
 
       <div className="card overflow-x-auto mt-6">
-        <h2 className="text-sm font-semibold text-slate-800 mb-1">Coach-wise Detailed Report</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-semibold text-slate-800">Coach-wise Detailed Report</h2>
+          <ExportCoachReportButton
+            month={activeMonth}
+            careplanTarget={careplanTargetCount}
+            rows={coachRows.map((r) => ({
+              coach: r.coach,
+              totalLeads: r.assigned,
+              activeLeads: r.activeLeads,
+              careplanRenewed: r.careplanRenewedCount,
+              careplanEligiblePct: r.careplanEligiblePct,
+              careplanIncentive: r.careplanIncentive,
+              nutraRevenue: r.nutra.revenue,
+              nutraIncentive: r.nutra.incentive,
+              cgmRevenue: r.cgm.revenue,
+              cgmIncentive: r.cgm.incentive,
+              bcaRevenue: r.bca.revenue,
+              bcaIncentive: r.bca.incentive,
+              medicineRevenue: r.medicine.revenue,
+              medicineIncentive: r.medicine.incentive,
+              totalIncentive: r.incentive,
+            }))}
+          />
+        </div>
         <p className="text-xs text-slate-400 mb-3">
           Target count is the lowest Careplan tier threshold configured for this month — the same
           for every coach. Nutra/CGM/BCA/Medicine have no target of their own; they&apos;re simple
