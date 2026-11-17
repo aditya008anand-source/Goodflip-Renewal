@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MySaathi — Renewal Management Portal',
+  title: 'Goodflip — Renewal Management Portal',
   description: 'TatvaCare GoodFlip patient renewal management portal',
 };
 

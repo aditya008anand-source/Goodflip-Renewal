@@ -1,4 +1,4 @@
--- MySaathi — Migration 7
+-- Goodflip — Migration 7
 -- Run this in the Supabase SQL editor AFTER migration-6.sql has already
 -- been run. Safe to re-run.
 --

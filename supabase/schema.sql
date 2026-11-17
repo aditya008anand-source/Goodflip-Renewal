@@ -1,4 +1,4 @@
--- MySaathi Renewal Management Portal — core schema
+-- Goodflip Renewal Management Portal — core schema
 -- Run this in the Supabase SQL editor (or via `supabase db push`) BEFORE policies.sql.
 -- Safe to re-run: every statement is guarded with IF NOT EXISTS / DROP ... IF EXISTS.
 

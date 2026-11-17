@@ -1,4 +1,4 @@
--- Row Level Security policies for the MySaathi Renewal Management Portal.
+-- Row Level Security policies for the Goodflip Renewal Management Portal.
 -- Run AFTER schema.sql. This is the real access control layer — the
 -- Next.js app's role checks are only there for UX (hiding nav links,
 -- redirecting), never the thing that actually keeps a coach off another

@@ -34,7 +34,7 @@ export default function JoinPage() {
             M
           </div>
           <div>
-            <p className="font-semibold text-slate-900 leading-tight">MySaathi</p>
+            <p className="font-semibold text-slate-900 leading-tight">Goodflip</p>
             <p className="text-xs text-slate-500 leading-tight">Renewal Management Portal</p>
           </div>
         </div>

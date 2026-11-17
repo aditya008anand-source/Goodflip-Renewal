@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
   // /join is the public self-signup page — reachable with no session at all.
   const isJoinRoute = pathname.startsWith('/join');
 
-  // 24-hour auto-logout: mysaathi_login_at is set by the login page at
+  // 24-hour auto-logout: goodflip_login_at is set by the login page at
   // sign-in time. Only a session whose cookie is actually present AND older
   // than 24h is treated as logged out here — a session with NO cookie yet
   // (e.g. one that started before this feature existed) is grandfathered in
@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   // out immediately. Forcing it unconditionally caused a redirect loop the
   // first time this shipped: it fought with the normal !user→/login and
   // user+isAuthRoute→/overview rules below every single request.
-  const loginAtCookie = request.cookies.get('mysaathi_login_at')?.value;
+  const loginAtCookie = request.cookies.get('goodflip_login_at')?.value;
   const dayMs = 24 * 60 * 60 * 1000;
   const sessionExpired = !!loginAtCookie && Date.now() - Number(loginAtCookie) > dayMs;
   const user = sessionExpired ? null : authedUser;
@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
       request.cookies.getAll().forEach((c) => {
         if (c.name.startsWith('sb-')) redirectResponse.cookies.delete(c.name);
       });
-      redirectResponse.cookies.delete('mysaathi_login_at');
+      redirectResponse.cookies.delete('goodflip_login_at');
     }
     return redirectResponse;
   }
@@ -75,7 +75,7 @@ export async function middleware(request: NextRequest) {
   // Grandfather an existing session that predates this feature: stamp the
   // cookie now instead of logging it out, so the 24h clock starts from here.
   if (user && !isAuthRoute && !loginAtCookie) {
-    response.cookies.set('mysaathi_login_at', String(Date.now()), {
+    response.cookies.set('goodflip_login_at', String(Date.now()), {
       path: '/',
       maxAge: 60 * 60 * 24,
     });

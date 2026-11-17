@@ -48,7 +48,7 @@ export default function LoginPage() {
     // Marks when this session started, read by middleware to force a
     // sign-out after 24 hours regardless of activity. Expires on its own
     // after 24h too, as a second safety net.
-    document.cookie = `mysaathi_login_at=${Date.now()}; path=/; max-age=${60 * 60 * 24}`;
+    document.cookie = `goodflip_login_at=${Date.now()}; path=/; max-age=${60 * 60 * 24}`;
 
     router.push('/overview');
     router.refresh();
@@ -62,7 +62,7 @@ export default function LoginPage() {
             M
           </div>
           <div>
-            <p className="font-semibold text-slate-900 leading-tight">MySaathi</p>
+            <p className="font-semibold text-slate-900 leading-tight">Goodflip</p>
             <p className="text-xs text-slate-500 leading-tight">Renewal Management Portal</p>
           </div>
         </div>

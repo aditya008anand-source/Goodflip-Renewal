@@ -1,4 +1,4 @@
-# MySaathi — Patient Renewal Management Portal
+# Goodflip — Patient Renewal Management Portal
 
 A renewal lead management portal for TatvaCare GoodFlip coaches and admins:
 lead tracking, call/follow-up history, payment recording, revenue and coach
@@ -70,7 +70,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (keep secret) |
 | `GOOGLE_SHEET_CSV_URL` | See section 4 below |
 | `SYNC_API_SECRET` | Any long random string you choose |
-| `NEXT_PUBLIC_SITE_URL` | Your deployed URL (e.g. `https://mysaathi.vercel.app`), used by the Settings page to call the sync API |
+| `NEXT_PUBLIC_SITE_URL` | Your deployed URL (e.g. `https://goodflip-renewal.vercel.app`), used by the Settings page to call the sync API |
 
 ## 4. Google Sheets integration
 
@@ -144,10 +144,10 @@ with the Admin account you created in step 2.6.
 ```bash
 git init
 git add .
-git commit -m "Initial MySaathi renewal portal"
-gh repo create mysaathi-renewal-portal --private --source=. --push
+git commit -m "Initial Goodflip renewal portal"
+gh repo create goodflip-renewal-portal --private --source=. --push
 # or, without the gh CLI:
-# git remote add origin https://github.com/<you>/mysaathi-renewal-portal.git
+# git remote add origin https://github.com/<you>/goodflip-renewal-portal.git
 # git branch -M main
 # git push -u origin main
 ```

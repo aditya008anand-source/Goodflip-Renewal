@@ -42,7 +42,7 @@ export default function NavBar({
               M
             </div>
             <div className="leading-tight">
-              <p className="font-semibold text-sm">MySaathi</p>
+              <p className="font-semibold text-sm">Goodflip</p>
               <p className="text-[10px] uppercase tracking-wide text-white/60">Renewal Portal</p>
             </div>
           </div>

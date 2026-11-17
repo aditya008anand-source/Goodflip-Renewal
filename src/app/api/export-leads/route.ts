@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
     status: 200,
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="mysaathi-leads-${month}-${user.role}.csv"`,
+      'Content-Disposition': `attachment; filename="goodflip-leads-${month}-${user.role}.csv"`,
     },
   });
 }

@@ -1,4 +1,4 @@
--- MySaathi — Migration 9
+-- Goodflip — Migration 9
 -- Run this in the Supabase SQL editor AFTER migration-8.sql has already
 -- been run. Safe to re-run.
 --

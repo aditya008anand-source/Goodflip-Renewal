@@ -1,4 +1,4 @@
--- MySaathi — Migration 2
+-- Goodflip — Migration 2
 -- Run this in the Supabase SQL editor AFTER schema.sql and policies.sql have
 -- already been run once. Safe to re-run (every statement is guarded).
 --

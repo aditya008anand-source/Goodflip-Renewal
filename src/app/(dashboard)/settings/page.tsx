@@ -7,6 +7,7 @@ import PaymentCategoryForm from '@/components/forms/PaymentCategoryForm';
 import CategoryActiveToggle from '@/components/forms/CategoryActiveToggle';
 import CategoryIncentiveModeToggle from '@/components/forms/CategoryIncentiveModeToggle';
 import IncentiveTargetTierForm from '@/components/forms/IncentiveTargetTierForm';
+import DeleteTierButton from '@/components/forms/DeleteTierButton';
 import UserRowActions from '@/components/forms/UserRowActions';
 import PendingUserActions from '@/components/forms/PendingUserActions';
 import SyncButton from '@/components/SyncButton';
@@ -264,6 +265,7 @@ export default async function SettingsPage() {
               <th>Minimum target</th>
               <th>Incentive %</th>
               <th>Effective from</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -275,11 +277,14 @@ export default async function SettingsPage() {
                 <td>{t.target_type === 'count' ? t.min_value : `${t.min_value}%`}</td>
                 <td>{t.incentive_percent}%</td>
                 <td>{format(new Date(t.effective_from), 'dd MMM yyyy')}</td>
+                <td>
+                  <DeleteTierButton tierId={t.id} />
+                </td>
               </tr>
             ))}
             {(targetTiers ?? []).length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center text-slate-400 py-4">
+                <td colSpan={7} className="text-center text-slate-400 py-4">
                   No tiers configured yet.
                 </td>
               </tr>

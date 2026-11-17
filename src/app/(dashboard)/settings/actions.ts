@@ -183,6 +183,17 @@ export async function setCategoryIncentiveMode(categoryId: string, mode: 'simple
   revalidatePath('/revenue');
 }
 
+export async function deleteIncentiveTargetTier(tierId: string) {
+  await requireAdmin();
+  const supabase = createServerSupabase();
+
+  const { error } = await supabase.from('incentive_target_tiers').delete().eq('id', tierId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/settings');
+  revalidatePath('/revenue');
+}
+
 export async function addIncentiveTargetTier(formData: FormData) {
   await requireAdmin();
   const supabase = createServerSupabase();
