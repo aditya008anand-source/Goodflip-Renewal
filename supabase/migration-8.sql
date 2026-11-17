@@ -24,7 +24,15 @@ alter table public.leads add column if not exists active boolean not null defaul
 
 alter table public.sync_logs add column if not exists rows_deactivated int not null default 0;
 
-create or replace view public.lead_overview
+-- CREATE OR REPLACE VIEW can't be used here: adding leads.active above
+-- means l.* now has one more column than before, which would shift every
+-- column that comes after it (coach_name, days_to_expiry, ...) by one
+-- position — Postgres refuses that as a column rename. Drop + recreate
+-- instead; nothing else in the database references this view by name in
+-- a way that would break (no FKs, no other views/policies depend on it).
+drop view if exists public.lead_overview;
+
+create view public.lead_overview
 with (security_invoker = true) as
 select
   l.*,
