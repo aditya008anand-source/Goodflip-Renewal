@@ -90,6 +90,7 @@ export interface PaymentCategory {
   team_subcategory: string | null; // e.g. 'Field', 'Inside Sales' — only meaningful for kind='service'
   active: boolean;
   incentive_mode: IncentiveMode;
+  target_group: string | null; // categories sharing this value are pooled together for target-tiered achievement/incentive, while staying separate everywhere else
   created_at: string;
 }
 

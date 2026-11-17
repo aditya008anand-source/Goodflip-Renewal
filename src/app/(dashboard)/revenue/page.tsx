@@ -66,6 +66,26 @@ export default async function RevenuePage({
     (allCategories ?? []).filter((c) => c.incentive_mode === 'target_tiered').map((c) => c.id)
   );
 
+  // Group target-tiered categories by target_group — categories sharing a
+  // group (e.g. Careplan's 3 team variants) are pooled into one achievement
+  // figure; a category with no target_group is its own group of one, label
+  // = its own name, same as before this change.
+  type TargetGroup = { label: string; categories: any[] };
+  const targetTieredGroupMap = new Map<string, TargetGroup>();
+  for (const c of (allCategories ?? []).filter((c: any) => c.incentive_mode === 'target_tiered')) {
+    const key = (c as any).target_group ?? c.id;
+    // A grouped label is the group key itself, title-cased (e.g.
+    // 'careplan' -> 'Careplan') — deterministic regardless of which
+    // category in the group the database happens to return first. An
+    // ungrouped category (no target_group) just keeps its own name.
+    const label = (c as any).target_group
+      ? (c as any).target_group.replace(/\b\w/g, (ch: string) => ch.toUpperCase())
+      : c.name;
+    if (!targetTieredGroupMap.has(key)) targetTieredGroupMap.set(key, { label, categories: [] });
+    targetTieredGroupMap.get(key)!.categories.push(c);
+  }
+  const targetTieredGroups: TargetGroup[] = Array.from(targetTieredGroupMap.values());
+
   const totalAssigned = allLeads.length;
   const totalRenewals = allLeads.filter((l) => l.status === 'Renewed').length;
   const totalRevenue = (payments ?? []).reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
@@ -94,11 +114,17 @@ export default async function RevenuePage({
     }
 
     // Target-tiered breakdown: achieved value is either a % (this coach's
-    // verified payments in this category ÷ their own "Active" sheet Column I
-    // leads this month) or a flat count, depending on how the ladder for
-    // this category+month was set up. A % ladder with 0 Active leads is left
-    // out entirely — there's nothing meaningful to show (and nothing to
-    // divide by); a Count ladder has no such dependency.
+    // verified payments in this GROUP of categories ÷ their own "Active"
+    // sheet Column I leads this month) or a flat count, depending on how
+    // the ladder for this group+month was set up. A % ladder with 0 Active
+    // leads is left out entirely — there's nothing meaningful to show (and
+    // nothing to divide by); a Count ladder has no such dependency.
+    //
+    // Categories sharing the same target_group (e.g. Careplan's 3 team
+    // variants) are pooled here — a coach's achievement is based on ALL of
+    // that group's payments combined, no matter which exact category a
+    // payment got tagged with. A category with no target_group is its own
+    // group of one, same as before.
     const targetBreakdown: {
       category: string;
       activeLeads: number;
@@ -110,19 +136,26 @@ export default async function RevenuePage({
       incentive: number;
     }[] = [];
     const activeLeadsCount = theirLeads.filter((l) => l.lead_master_status === 'Active').length;
-    for (const cat of (allCategories ?? []).filter((c) => c.incentive_mode === 'target_tiered')) {
-      const ladder = findApplicableTiers(targetTiers ?? [], cat.id, activeMonth);
+    for (const group of targetTieredGroups) {
+      const groupCategoryIds = group.categories.map((c) => c.id);
+      // Only one category in the group needs an actual ladder configured
+      // (the others can be left blank) — use whichever one has rows.
+      let ladder: NonNullable<typeof targetTiers> = [];
+      for (const cat of group.categories) {
+        ladder = findApplicableTiers(targetTiers ?? [], cat.id, activeMonth);
+        if (ladder.length > 0) break;
+      }
       const targetType = ladder[0]?.target_type ?? 'percentage';
       if (targetType === 'percentage' && activeLeadsCount === 0) continue;
 
-      const catPayments = theirPayments.filter((p) => p.category_id === cat.id);
+      const catPayments = theirPayments.filter((p) => groupCategoryIds.includes(p.category_id));
       const catRevenue = catPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
       const achievedValue =
         targetType === 'count' ? catPayments.length : (catPayments.length / activeLeadsCount) * 100;
       const tierResult = calculateTargetTierIncentive(ladder, achievedValue, catRevenue);
       incentiveTotal += tierResult.amount;
       targetBreakdown.push({
-        category: cat.name,
+        category: group.label,
         activeLeads: activeLeadsCount,
         converted: catPayments.length,
         targetType,
@@ -157,16 +190,14 @@ export default async function RevenuePage({
       return acc;
     }, {})
   );
-  // Fold each coach's target-tiered incentive into the matching category row
-  // — the aggregate % across all coaches wouldn't mean the same thing as
-  // each coach's own tier, so this is summed up from the per-coach numbers
-  // computed above rather than recalculated company-wide.
-  for (const row of coachRows) {
-    for (const tb of row.targetBreakdown) {
-      const match = (categoryRows as any[]).find((r) => r.name === tb.category);
-      if (match) match.incentive += tb.incentive;
-    }
-  }
+  // Target-tiered incentive is NOT folded into "Revenue by Product/Service"
+  // below — when a group pools multiple categories (e.g. Careplan's 3 team
+  // variants), there's no single correct category to attribute that
+  // incentive amount to. Each category in the group still shows its own
+  // REVENUE there (so the Field/Inside Sales/plain split stays visible),
+  // but its Incentive column stays 0 for any target-tiered category — the
+  // one correct combined incentive number lives only in the "Target
+  // achievement" table below, computed once per group.
 
   return (
     <div>
@@ -257,7 +288,6 @@ export default async function RevenuePage({
       </div>
 
       {coachRows.some((r) => r.targetBreakdown.length > 0) && (() => {
-        const targetCategories = (allCategories ?? []).filter((c) => c.incentive_mode === 'target_tiered');
         return (
           <div className="card overflow-x-auto mt-6">
             <h2 className="text-sm font-semibold text-slate-800 mb-3">Target achievement</h2>
@@ -265,11 +295,11 @@ export default async function RevenuePage({
               <thead>
                 <tr>
                   <th>Coach</th>
-                  {targetCategories.map((c) => (
-                    <Fragment key={c.id}>
-                      <th className="text-right">{c.name} — Achieved</th>
-                      <th className="text-right">{c.name} — Tier Rate</th>
-                      <th className="text-right">{c.name} — Incentive</th>
+                  {targetTieredGroups.map((g) => (
+                    <Fragment key={g.label}>
+                      <th className="text-right">{g.label} — Achieved</th>
+                      <th className="text-right">{g.label} — Tier Rate</th>
+                      <th className="text-right">{g.label} — Incentive</th>
                     </Fragment>
                   ))}
                 </tr>
@@ -280,10 +310,10 @@ export default async function RevenuePage({
                   .map((r) => (
                     <tr key={r.coach}>
                       <td className="font-medium text-slate-700">{r.coach}</td>
-                      {targetCategories.map((c) => {
-                        const tb = r.targetBreakdown.find((t) => t.category === c.name);
+                      {targetTieredGroups.map((g) => {
+                        const tb = r.targetBreakdown.find((t) => t.category === g.label);
                         return (
-                          <Fragment key={c.id}>
+                          <Fragment key={g.label}>
                             <td className="text-right">
                               {tb
                                 ? `${
