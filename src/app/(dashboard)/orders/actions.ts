@@ -10,7 +10,7 @@ import { createServerSupabase } from '@/lib/supabase/server';
 // (migration-4.sql), same pattern as payment verification.
 export async function updateOrderFulfillment(
   paymentId: string,
-  fields: { order_id?: string; tracking_link?: string; plan_assigned?: boolean }
+  fields: { order_id?: string; tracking_link?: string }
 ) {
   const user = await requireOrderAccess();
   const supabase = createServerSupabase();

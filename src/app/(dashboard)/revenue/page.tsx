@@ -55,6 +55,11 @@ export default async function RevenuePage({
   const pendingVerificationCount = (allPayments ?? []).filter(
     (p: any) => p.verification_status === 'pending'
   ).length;
+  // "Renewed" means a VERIFIED payment exists — a pending payment can still
+  // be rejected on verification, so it doesn't count as a renewal anywhere
+  // on this page until then (same rule revenue already followed; renewal
+  // count and conversion % now follow it too).
+  const verifiedLeadIds = new Set(payments.map((p: any) => p.lead_id));
 
   const { data: incentiveRules } = await supabase.from('incentive_settings').select('*');
   const { data: allCategories } = await supabase.from('payment_categories').select('*');
@@ -89,22 +94,21 @@ export default async function RevenuePage({
   const targetTieredGroups: TargetGroup[] = Array.from(targetTieredGroupMap.values());
 
   const totalAssigned = allLeads.length;
-  const totalRenewals = allLeads.filter((l) => l.status === 'Renewed').length;
+  const totalRenewals = allLeads.filter((l) => verifiedLeadIds.has(l.id)).length;
   const totalRevenue = (payments ?? []).reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   const pendingPayments = allLeads.filter((l) => l.payment_status === 'Pending').length;
   const lostLeads = allLeads.filter((l) => ['Lost', 'Not Interested', 'Not Reachable'].includes(l.status)).length;
   const conversionRate = totalAssigned ? ((totalRenewals / totalAssigned) * 100).toFixed(1) : '0.0';
 
   // Renewed / Revenue broken into Careplan (its 3 team variants, pooled) vs
-  // everything else — same split shown on the Overview page. Classification
-  // ("is this a Careplan renewal?") uses EVERY Paid payment regardless of
-  // verification — a Careplan payment awaiting verification is still a
-  // Careplan renewal, just not counted in ₹ until verified. Only the ₹
-  // amounts below use `payments` (verified-only).
+  // everything else — same split shown on the Overview page. Both the count
+  // and the ₹ amount only ever use VERIFIED payments (`payments`) now — a
+  // pending payment could still be rejected, so it doesn't count as a
+  // renewal until verified.
   const careplanCategories = (allCategories ?? []).filter((c: any) => targetTieredCategoryIds.has(c.id));
-  const renewedLeadsThisMonth = allLeads.filter((l) => l.status === 'Renewed');
+  const renewedLeadsThisMonth = allLeads.filter((l) => verifiedLeadIds.has(l.id));
   const careplanRenewedLeadIds = new Set(
-    (allPayments ?? [])
+    payments
       .filter((p: any) => p.category_id && targetTieredCategoryIds.has(p.category_id))
       .map((p: any) => p.lead_id)
   );
@@ -113,7 +117,7 @@ export default async function RevenuePage({
     .map((c: any) => ({
       label: c.name,
       count: renewedLeadsThisMonth.filter((l) =>
-        (allPayments ?? []).some((p: any) => p.lead_id === l.id && p.category_id === c.id)
+        payments.some((p: any) => p.lead_id === l.id && p.category_id === c.id)
       ).length,
     }))
     .filter((c) => c.count > 0);
@@ -180,7 +184,7 @@ export default async function RevenuePage({
       theirLeads.some((l) => l.id === p.lead_id)
     );
     const revenue = theirPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
-    const renewals = theirLeads.filter((l) => l.status === 'Renewed').length;
+    const renewals = theirLeads.filter((l) => verifiedLeadIds.has(l.id)).length;
 
     let incentiveTotal = 0;
     for (const p of theirPayments) {

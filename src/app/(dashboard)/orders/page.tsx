@@ -1,18 +1,27 @@
-import { requireOrderAccess } from '@/lib/auth';
-import { createServerSupabase } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/auth';
+import { createServiceRoleSupabase } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import OrderFulfillmentRow from '@/components/forms/OrderFulfillmentRow';
 
 // Only verified Product (CGM/BCA/Nutra — not Services) purchases show up
 // here: nothing to fulfill until a payment is actually confirmed on the
 // Revenue flow, and Services (Careplans) don't ship anything.
+//
+// Viewing this page is open to every signed-in user (coach or admin) — no
+// "Order Access" grant needed just to see it, hence the service-role client
+// below (bypasses RLS, which would otherwise scope a coach to only their
+// own patients). Editing the Order ID / tracking fields stays restricted to
+// Admin / whoever's been granted Order Access — see `canEdit` below and
+// requireOrderAccess() in actions.ts, which still enforces this at the
+// database level too.
 export default async function OrdersPage({
   searchParams,
 }: {
   searchParams: { q?: string };
 }) {
-  await requireOrderAccess();
-  const supabase = createServerSupabase();
+  const user = await getCurrentUser();
+  const canEdit = user.role === 'admin' || user.canManageOrders;
+  const supabase = createServiceRoleSupabase();
 
   let query = supabase
     .from('payments')
@@ -42,8 +51,10 @@ export default async function OrdersPage({
     <div>
       <h1 className="text-xl font-semibold text-slate-900 mb-1">Orders</h1>
       <p className="text-sm text-slate-500 mb-4">
-        Verified Product purchases — add the Order ID / tracking link and confirm once the plan is
-        assigned.
+        Verified Product purchases.
+        {canEdit
+          ? ' Add the Order ID / tracking link below.'
+          : ' Order ID / tracking link are added by Admin or Order Access.'}
       </p>
 
       <form className="card mb-4 flex gap-2">
@@ -68,7 +79,7 @@ export default async function OrdersPage({
               <th>Product</th>
               <th>Amount</th>
               <th>Verified on</th>
-              <th>Order ID / Tracking / Plan Assigned</th>
+              <th>Order ID / Tracking</th>
             </tr>
           </thead>
           <tbody>
@@ -84,7 +95,7 @@ export default async function OrdersPage({
                     paymentId={p.id}
                     initialOrderId={p.order_id}
                     initialTrackingLink={p.tracking_link}
-                    initialPlanAssigned={p.plan_assigned}
+                    canEdit={canEdit}
                   />
                 </td>
               </tr>

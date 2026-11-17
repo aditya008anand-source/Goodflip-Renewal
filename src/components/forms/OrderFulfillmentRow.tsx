@@ -7,21 +7,20 @@ export default function OrderFulfillmentRow({
   paymentId,
   initialOrderId,
   initialTrackingLink,
-  initialPlanAssigned,
+  canEdit,
 }: {
   paymentId: string;
   initialOrderId: string | null;
   initialTrackingLink: string | null;
-  initialPlanAssigned: boolean;
+  canEdit: boolean;
 }) {
   const [orderId, setOrderId] = useState(initialOrderId ?? '');
   const [trackingLink, setTrackingLink] = useState(initialTrackingLink ?? '');
-  const [planAssigned, setPlanAssigned] = useState(initialPlanAssigned);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function save(fields: { order_id?: string; tracking_link?: string; plan_assigned?: boolean }) {
+  function save(fields: { order_id?: string; tracking_link?: string }) {
     setError(null);
     setSaved(false);
     startTransition(async () => {
@@ -33,6 +32,21 @@ export default function OrderFulfillmentRow({
         setError(e.message);
       }
     });
+  }
+
+  if (!canEdit) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+        <span>{orderId || '—'}</span>
+        {trackingLink ? (
+          <a href={trackingLink} target="_blank" rel="noreferrer" className="text-brand-700 underline">
+            {trackingLink}
+          </a>
+        ) : (
+          <span className="text-slate-400">—</span>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -51,17 +65,6 @@ export default function OrderFulfillmentRow({
         onChange={(e) => setTrackingLink(e.target.value)}
         onBlur={() => save({ tracking_link: trackingLink })}
       />
-      <label className="flex items-center gap-1.5 text-xs text-slate-600 shrink-0">
-        <input
-          type="checkbox"
-          checked={planAssigned}
-          onChange={(e) => {
-            setPlanAssigned(e.target.checked);
-            save({ plan_assigned: e.target.checked });
-          }}
-        />
-        Plan Assigned
-      </label>
       {isPending && (
         <span className="h-3 w-3 rounded-full border-2 border-slate-200 border-t-brand-700 animate-spin shrink-0" />
       )}

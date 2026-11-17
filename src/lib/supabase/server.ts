@@ -34,8 +34,11 @@ export function createServerSupabase() {
 
 // Admin-privileged client using the service-role key. ONLY ever used inside
 // server-only code that must bypass RLS on purpose: the Google Sheets sync
-// route and the one-off import script. Never import this from a Server
-// Component, Client Component, or anything that runs per-request-user.
+// route, the one-off import script, Settings' user-management actions, and
+// the Orders page's read (every signed-in user can SEE every order —
+// editing it is a separate, still RLS-enforced permission; see
+// requireOrderAccess()). Never import this to show or change anything else
+// a viewer shouldn't otherwise be allowed to see or do.
 export function createServiceRoleSupabase() {
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

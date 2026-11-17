@@ -6,11 +6,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-surface-bg">
-      <NavBar
-        role={user.role}
-        name={user.name}
-        showOrders={user.role === 'admin' || user.canManageOrders}
-      />
+      {/* Orders is now visible to everyone signed in — only editing the
+          Order ID / tracking fields stays gated to Admin / Order Access. */}
+      <NavBar role={user.role} name={user.name} showOrders={true} />
       <main className="max-w-7xl mx-auto px-6 py-6">{children}</main>
     </div>
   );
