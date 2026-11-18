@@ -31,8 +31,9 @@ export async function GET(request: NextRequest) {
   else if (coach) query = query.eq('source_coach_name', coach);
   const status = params.get('status');
   if (status) query = query.eq('status', status);
-  const priority = params.get('priority');
-  if (priority) query = query.eq('priority', priority);
+  const leadType = params.get('lead_type');
+  if (leadType === 'Blank') query = query.is('lead_master_status', null);
+  else if (leadType) query = query.eq('lead_master_status', leadType);
   const payment = params.get('payment');
   if (payment === 'Pending') query = query.eq('latest_payment_status', 'Pending');
   else if (payment === 'Paid_unverified')

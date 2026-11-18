@@ -98,13 +98,14 @@ export default function LeadsFilters({
 
         <select
           className="input"
-          defaultValue={searchParams.get('priority') ?? ''}
-          onChange={(e) => update('priority', e.target.value)}
+          defaultValue={searchParams.get('lead_type') ?? ''}
+          onChange={(e) => update('lead_type', e.target.value)}
         >
-          <option value="">All Priorities</option>
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
+          <option value="">All Lead Types</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+          <option value="Nutra Order">Nutra Order</option>
+          <option value="Blank">Blank</option>
         </select>
 
         <select
@@ -119,40 +120,46 @@ export default function LeadsFilters({
           <option value="Paid_rejected">Paid — Rejected</option>
         </select>
 
-        <div className="flex gap-1 items-center col-span-2">
-          <input
-            type="date"
-            className="input"
-            title="Expiry from"
-            defaultValue={searchParams.get('expiry_from') ?? ''}
-            onChange={(e) => update('expiry_from', e.target.value)}
-          />
-          <span className="text-xs text-slate-400">to</span>
-          <input
-            type="date"
-            className="input"
-            title="Expiry to"
-            defaultValue={searchParams.get('expiry_to') ?? ''}
-            onChange={(e) => update('expiry_to', e.target.value)}
-          />
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-slate-500 mb-1">Plan Expiry Date</label>
+          <div className="flex gap-1 items-center">
+            <input
+              type="date"
+              className="input"
+              title="Expiry from"
+              defaultValue={searchParams.get('expiry_from') ?? ''}
+              onChange={(e) => update('expiry_from', e.target.value)}
+            />
+            <span className="text-xs text-slate-400">to</span>
+            <input
+              type="date"
+              className="input"
+              title="Expiry to"
+              defaultValue={searchParams.get('expiry_to') ?? ''}
+              onChange={(e) => update('expiry_to', e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="flex gap-1 items-center col-span-2">
-          <input
-            type="date"
-            className="input"
-            title="Follow-up from"
-            defaultValue={searchParams.get('followup_from') ?? ''}
-            onChange={(e) => update('followup_from', e.target.value)}
-          />
-          <span className="text-xs text-slate-400">to</span>
-          <input
-            type="date"
-            className="input"
-            title="Follow-up to"
-            defaultValue={searchParams.get('followup_to') ?? ''}
-            onChange={(e) => update('followup_to', e.target.value)}
-          />
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-slate-500 mb-1">Next Follow-up Date</label>
+          <div className="flex gap-1 items-center">
+            <input
+              type="date"
+              className="input"
+              title="Follow-up from"
+              defaultValue={searchParams.get('followup_from') ?? ''}
+              onChange={(e) => update('followup_from', e.target.value)}
+            />
+            <span className="text-xs text-slate-400">to</span>
+            <input
+              type="date"
+              className="input"
+              title="Follow-up to"
+              defaultValue={searchParams.get('followup_to') ?? ''}
+              onChange={(e) => update('followup_to', e.target.value)}
+            />
+          </div>
         </div>
       </div>
     </div>

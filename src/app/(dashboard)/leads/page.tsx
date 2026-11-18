@@ -55,7 +55,13 @@ export default async function LeadsPage({
     query = query.eq('source_coach_name', searchParams.coach);
   }
   if (searchParams.status) query = query.eq('status', searchParams.status);
-  if (searchParams.priority) query = query.eq('priority', searchParams.priority);
+  // Replaces the old "Priority" filter (High/Medium/Low — a field nobody
+  // actually used) with the sheet's own Column I lead type instead.
+  if (searchParams.lead_type === 'Blank') {
+    query = query.is('lead_master_status', null);
+  } else if (searchParams.lead_type) {
+    query = query.eq('lead_master_status', searchParams.lead_type);
+  }
   if (searchParams.payment === 'Pending') {
     query = query.eq('latest_payment_status', 'Pending');
   } else if (searchParams.payment === 'Paid_unverified') {
