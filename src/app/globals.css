@@ -31,3 +31,16 @@
     @apply py-2.5 px-3 border-b border-slate-50 align-middle;
   }
 }
+
+/* Number inputs: hide the up/down spinner arrows app-wide — they invite an
+   accidental scroll-wheel change while typing a count, which is the actual
+   complaint (removing just the arrows doesn't stop that; see the onWheel
+   blur() added alongside every count input in PaymentForm.tsx). */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

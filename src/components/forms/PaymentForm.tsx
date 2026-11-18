@@ -8,6 +8,13 @@ const DRUG_NAMES = ['Semaglutide', 'Mounjaro', 'Wegovy'] as const;
 const CGM_TYPES = ['Libre', 'Libre2+', 'Goodflip'] as const;
 const COACH_TYPES = ['Diet', 'Physio', 'CBT'] as const;
 
+// A focused number input changes value on a mouse-wheel scroll in Chrome —
+// easy to trigger by accident while scrolling the page. Blurring it on
+// wheel stops that without needing to touch each input's value handling.
+function blurOnWheel(e: React.WheelEvent<HTMLInputElement>) {
+  e.currentTarget.blur();
+}
+
 interface PlanDetails {
   planName: string;
   duration: string;
@@ -169,7 +176,7 @@ export default function PaymentForm({
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Amount (₹)</label>
-          <input type="number" step="0.01" name="amount" required className="input" />
+          <input type="number" step="0.01" name="amount" required className="input" onWheel={blurOnWheel} />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Payment date</label>
@@ -231,6 +238,7 @@ export default function PaymentForm({
               type="number"
               className="input"
               placeholder="Diagnostics count"
+              onWheel={blurOnWheel}
               value={planDetails.diagnostics.count}
               onChange={(e) =>
                 setPlanDetails((d) => ({ ...d, diagnostics: { ...d.diagnostics, count: e.target.value } }))
@@ -250,6 +258,7 @@ export default function PaymentForm({
               type="number"
               className="input"
               placeholder="Dr. Consultation count"
+              onWheel={blurOnWheel}
               value={planDetails.consultation.count}
               onChange={(e) =>
                 setPlanDetails((d) => ({ ...d, consultation: { ...d.consultation, count: e.target.value } }))
@@ -321,6 +330,7 @@ export default function PaymentForm({
               type="number"
               className="input"
               placeholder="BCA count"
+              onWheel={blurOnWheel}
               value={planDetails.bca.count}
               onChange={(e) => setPlanDetails((d) => ({ ...d, bca: { ...d.bca, count: e.target.value } }))}
             />
@@ -368,6 +378,7 @@ export default function PaymentForm({
                     type="number"
                     className="input"
                     placeholder="Sensor count"
+                    onWheel={blurOnWheel}
                     value={planDetails.cgm.sensorCount}
                     onChange={(e) =>
                       setPlanDetails((d) => ({ ...d, cgm: { ...d.cgm, sensorCount: e.target.value } }))
@@ -377,6 +388,7 @@ export default function PaymentForm({
                     type="number"
                     className="input"
                     placeholder="Transmitter count (optional)"
+                    onWheel={blurOnWheel}
                     value={planDetails.cgm.transmitterCount}
                     onChange={(e) =>
                       setPlanDetails((d) => ({ ...d, cgm: { ...d.cgm, transmitterCount: e.target.value } }))

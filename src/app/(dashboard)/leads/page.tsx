@@ -5,7 +5,7 @@ import { currentMonthCohort } from '@/lib/months';
 import MonthTabs from '@/components/MonthTabs';
 import LeadsFilters from '@/components/LeadsFilters';
 import ExportCsvButton from '@/components/ExportCsvButton';
-import { StatusBadge, PriorityBadge } from '@/components/StatusBadge';
+import { StatusBadge } from '@/components/StatusBadge';
 import { format } from 'date-fns';
 
 export default async function LeadsPage({
@@ -111,7 +111,7 @@ export default async function LeadsPage({
               <th>Programme</th>
               <th>Plan Expiry</th>
               <th>Days to Expiry</th>
-              <th>Priority</th>
+              <th>Lead Type</th>
               <th>Lead Status</th>
               <th>Last Attempt</th>
               <th>Attempts</th>
@@ -139,9 +139,7 @@ export default async function LeadsPage({
                 >
                   {lead.days_to_expiry ?? '—'}
                 </td>
-                <td>
-                  <PriorityBadge priority={lead.priority} />
-                </td>
+                <td className="text-slate-600">{lead.lead_master_status ?? '—'}</td>
                 <td>
                   <StatusBadge status={lead.status} />
                 </td>
