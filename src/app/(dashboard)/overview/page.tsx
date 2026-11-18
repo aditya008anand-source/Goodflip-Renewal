@@ -25,7 +25,14 @@ export default async function OverviewPage({
   );
   if (availableMonths.length === 0) availableMonths.push(currentMonthCohort());
 
-  const activeMonth = searchParams.month ?? availableMonths[0];
+  // Default to the actual current month, not just whichever month has the
+  // latest data (e.g. next month's leads already synced in ahead of time)
+  // — a coach/admin opening the dashboard should land on "now" unless they
+  // explicitly pick a different tab.
+  const defaultMonth = availableMonths.includes(currentMonthCohort())
+    ? currentMonthCohort()
+    : availableMonths[0];
+  const activeMonth = searchParams.month ?? defaultMonth;
 
   let query = supabase.from('leads').select('*').eq('month_cohort', activeMonth).eq('active', true);
   const { data: leads } = await query;

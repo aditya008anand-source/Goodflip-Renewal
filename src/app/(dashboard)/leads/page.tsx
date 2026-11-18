@@ -23,7 +23,14 @@ export default async function LeadsPage({
     .order('month_cohort', { ascending: false });
   const availableMonths = Array.from(new Set((monthRows ?? []).map((r) => r.month_cohort)));
   if (availableMonths.length === 0) availableMonths.push(currentMonthCohort());
-  const activeMonth = searchParams.month ?? availableMonths[0];
+  // Default to the actual current month, not just whichever month has the
+  // latest data (e.g. next month's leads already synced in ahead of time)
+  // — a coach/admin opening the dashboard should land on "now" unless they
+  // explicitly pick a different tab.
+  const defaultMonth = availableMonths.includes(currentMonthCohort())
+    ? currentMonthCohort()
+    : availableMonths[0];
+  const activeMonth = searchParams.month ?? defaultMonth;
 
   // Coach list is the sheet's own "Renewal Coach" names, not the list of
   // who has been invited/has a login — a coach with leads in the sheet but
