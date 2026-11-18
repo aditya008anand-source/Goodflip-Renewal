@@ -180,11 +180,18 @@ export default async function RevenuePage({
 
   const coachRows = coachNames.map((name) => {
     const theirLeads = allLeads.filter((l: any) => l.source_coach_name === name);
+    // Every performance number below (renewals, conversion %, revenue,
+    // incentive, and the target-tier achieved count) is counted against
+    // only this coach's Active-status leads this month (sheet Column I) —
+    // an Inactive/Nutra Order lead's payment never inflates these, even
+    // though "Total Leads" above still shows everyone assigned.
+    const activeLeadsCount = theirLeads.filter((l) => l.lead_master_status === 'Active').length;
+    const theirActiveLeads = theirLeads.filter((l) => l.lead_master_status === 'Active');
     const theirPayments = (payments ?? []).filter((p) =>
-      theirLeads.some((l) => l.id === p.lead_id)
+      theirActiveLeads.some((l) => l.id === p.lead_id)
     );
     const revenue = theirPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
-    const renewals = theirLeads.filter((l) => verifiedLeadIds.has(l.id)).length;
+    const renewals = theirActiveLeads.filter((l) => verifiedLeadIds.has(l.id)).length;
 
     let incentiveTotal = 0;
     for (const p of theirPayments) {
@@ -220,7 +227,6 @@ export default async function RevenuePage({
       revenue: number;
       incentive: number;
     }[] = [];
-    const activeLeadsCount = theirLeads.filter((l) => l.lead_master_status === 'Active').length;
     for (const group of targetTieredGroups) {
       const groupCategoryIds = group.categories.map((c) => c.id);
       // Only one category in the group needs an actual ladder configured
@@ -279,7 +285,7 @@ export default async function RevenuePage({
       assigned: theirLeads.length,
       activeLeads: activeLeadsCount,
       renewals,
-      conversion: theirLeads.length ? ((renewals / theirLeads.length) * 100).toFixed(1) : '0.0',
+      conversion: activeLeadsCount ? ((renewals / activeLeadsCount) * 100).toFixed(1) : '0.0',
       revenue,
       incentive: incentiveTotal,
       targetBreakdown,
