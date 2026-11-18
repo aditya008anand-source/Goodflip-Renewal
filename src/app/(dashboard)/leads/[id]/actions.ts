@@ -53,12 +53,37 @@ export async function recordPayment(leadId: string, formData: FormData) {
   const remarks = String(formData.get('remarks') ?? '').trim() || null;
   const categoryId = String(formData.get('category_id') ?? '').trim() || null;
   const screenshot = formData.get('screenshot') as File | null;
+  const planDetailsRaw = String(formData.get('plan_details') ?? '').trim() || null;
 
   if (!categoryId) throw new Error('Product/Service is required.');
   if (!amount) throw new Error('Amount is required.');
   if (!paymentDate) throw new Error('Payment date is required.');
   if (!remarks) throw new Error('Remarks are required.');
   if (!screenshot || screenshot.size === 0) throw new Error('Payment screenshot is required.');
+
+  // A Careplan-group category requires its plan-details form to have been
+  // filled in — checked here too (not just in the client form) so this
+  // can never be bypassed by calling the action directly. Only a shallow
+  // "is everything present" check — the form itself already enforces each
+  // field's own Yes/No-dependent requirement before it ever gets here.
+  const { data: category } = await supabase
+    .from('payment_categories')
+    .select('target_group')
+    .eq('id', categoryId)
+    .single();
+  let planDetails: Record<string, unknown> | null = null;
+  if (category?.target_group === 'careplan') {
+    if (!planDetailsRaw) throw new Error('Careplan plan details are required.');
+    try {
+      planDetails = JSON.parse(planDetailsRaw);
+    } catch {
+      throw new Error('Careplan plan details are invalid.');
+    }
+    const required = ['planName', 'duration', 'diagnostics', 'consultation', 'coaches', 'drug', 'bca', 'cgm'];
+    if (!planDetails || required.some((k) => !(k in planDetails!))) {
+      throw new Error('Careplan plan details are incomplete.');
+    }
+  }
 
   const ext = screenshot.name.split('.').pop() || 'png';
   const path = `${leadId}/${Date.now()}.${ext}`;
@@ -77,6 +102,7 @@ export async function recordPayment(leadId: string, formData: FormData) {
     remarks,
     category_id: categoryId,
     recorded_by: user.id,
+    plan_details: planDetails,
   });
   if (paymentError) throw new Error(paymentError.message);
 

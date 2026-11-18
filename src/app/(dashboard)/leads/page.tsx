@@ -159,6 +159,9 @@ export default async function LeadsPage({
                   {lead.latest_payment_status === 'Paid' && lead.latest_verification_status && (
                     <span className="text-xs text-slate-400"> ({lead.latest_verification_status})</span>
                   )}
+                  {lead.payment_summary && (
+                    <p className="text-xs text-slate-400 whitespace-nowrap">{lead.payment_summary}</p>
+                  )}
                 </td>
                 <td>
                   <Link href={`/leads/${lead.id}`} className="text-brand-700 font-medium text-xs">
