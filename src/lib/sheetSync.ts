@@ -82,7 +82,6 @@ export async function syncParsedLeadsToDatabase(
           team: lead.team,
           clinical_discipline: lead.clinicalDiscipline,
           plan_expiry_date: lead.planExpiryDate,
-          source_coach_name: lead.sourceCoachName,
         };
         const updatePayload: Record<string, unknown> = {};
         for (const [field, value] of Object.entries(candidateFields)) {
@@ -90,7 +89,24 @@ export async function syncParsedLeadsToDatabase(
             updatePayload[field] = value;
           }
         }
-        if (!existing.coach_id && coachId) updatePayload.coach_id = coachId;
+
+        // source_coach_name (sheet's "Renewal Coach" column) is, like
+        // lead_master_status below, a live value that can genuinely change
+        // run to run (a coach reassignment) — it must always be refreshed
+        // here, not just filled in once while empty, otherwise a
+        // reassignment in the sheet would silently never reach the
+        // dashboard. coach_id is re-derived alongside it every time the
+        // name changes, not only the first time it's set.
+        if (
+          lead.sourceCoachName != null &&
+          lead.sourceCoachName !== '' &&
+          lead.sourceCoachName !== (existing as any).source_coach_name
+        ) {
+          updatePayload.source_coach_name = lead.sourceCoachName;
+          updatePayload.coach_id = coachId ?? null;
+        } else if (!existing.coach_id && coachId) {
+          updatePayload.coach_id = coachId;
+        }
 
         // Reappeared after being soft-deleted on an earlier sync (removed
         // from the sheet, then added back) — bring it back into every page.
