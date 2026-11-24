@@ -187,14 +187,27 @@ export default async function RevenuePage({
 
   const coachRows = coachNames.map((name) => {
     const theirLeads = allLeads.filter((l: any) => l.source_coach_name === name);
-    // Every performance number below (renewals, conversion %, revenue,
-    // incentive, and the target-tier achieved count) is counted against
-    // only this coach's Active-status leads this month (sheet Column I) —
-    // an Inactive/Nutra Order lead's payment never inflates these, even
-    // though "Total Leads" above still shows everyone assigned.
+    // Renewals, conversion %, and the Careplan target-tier achieved count
+    // are counted against only this coach's Active-status leads this month
+    // (sheet Column I) — an Inactive/Nutra Order lead's payment never
+    // inflates those, even though "Total Leads" above still shows everyone
+    // assigned.
     const activeLeadsCount = theirLeads.filter((l) => l.lead_master_status === 'Active').length;
     const theirActiveLeads = theirLeads.filter((l) => l.lead_master_status === 'Active');
+
+    // Revenue/incentive, however, is counted across ALL of this coach's
+    // leads this month, not just Active-status ones — a lead with a blank
+    // (or Inactive/Nutra Order) Column I value can still carry a perfectly
+    // real verified Nutra/CGM/BCA/Medicine sale, and that revenue was
+    // silently disappearing from this report (and from the coach's overall
+    // Revenue/Incentive totals) when it got filtered down to Active-only.
     const theirPayments = (payments ?? []).filter((p) =>
+      theirLeads.some((l) => l.id === p.lead_id)
+    );
+    // The Careplan target-tier ladder below is the one calculation that
+    // DOES stay Active-only — its % is "converted ÷ Active leads", so its
+    // payments must come from the same Active-only set as that denominator.
+    const theirActivePayments = theirPayments.filter((p) =>
       theirActiveLeads.some((l) => l.id === p.lead_id)
     );
     const revenue = theirPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
@@ -246,7 +259,7 @@ export default async function RevenuePage({
       const targetType = ladder[0]?.target_type ?? 'percentage';
       if (targetType === 'percentage' && activeLeadsCount === 0) continue;
 
-      const catPayments = theirPayments.filter((p) => groupCategoryIds.includes(p.category_id));
+      const catPayments = theirActivePayments.filter((p) => groupCategoryIds.includes(p.category_id));
       const catRevenue = catPayments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
       const achievedValue =
         targetType === 'count' ? catPayments.length : (catPayments.length / activeLeadsCount) * 100;
