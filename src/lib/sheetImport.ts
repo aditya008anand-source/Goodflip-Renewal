@@ -19,6 +19,7 @@ const COL = {
   planExpiry: 7,
   leadMasterStatus: 8, // "Active" / "Inactive" / "Nutra Order" — distinct from the portal's own workflow status
   refundStatus: 9,
+  oldPlanPrice: 13, // price of the plan the patient is renewing FROM, shown for reference alongside the new payment
   paymentAmount: 15,
   renewedPlan: 16,
   attempt1Date: 20,
@@ -86,6 +87,7 @@ export interface ParsedLead {
   sourceCoachName: string | null;
   clinicalDiscipline: string | null;
   planExpiryDate: string | null;
+  oldPlanPrice: number | null;
   status: string;
   leadMasterStatus: string | null; // sheet Column I: "Active" / "Inactive" / "Nutra Order"
   needsReview: boolean;
@@ -176,6 +178,12 @@ export function parseSheetRows(
 
       const sourceCoachName = row[COL.renewalCoach]?.trim() || null;
 
+      const oldPlanPriceRaw = row[COL.oldPlanPrice]?.trim().replace(/,/g, '');
+      const oldPlanPrice =
+        oldPlanPriceRaw && !Number.isNaN(Number(oldPlanPriceRaw)) && Number(oldPlanPriceRaw) > 0
+          ? Number(oldPlanPriceRaw)
+          : null;
+
       const planExpiryDate = parseSheetDate(row[COL.planExpiry], fallbackYear);
       // Month cohort now comes from each row's own expiry date, so rows for
       // different months can live in the same sheet/tab and each lands in
@@ -198,6 +206,7 @@ export function parseSheetRows(
         sourceCoachName,
         clinicalDiscipline: row[COL.coaches]?.trim() || null,
         planExpiryDate,
+        oldPlanPrice,
         status,
         leadMasterStatus: row[COL.leadMasterStatus]?.trim() || null,
         needsReview: reviewNotes.length > 0,

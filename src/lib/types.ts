@@ -54,6 +54,7 @@ export interface Lead {
   month_cohort: string; // e.g. '2026-11'
   plan_start_date: string | null;
   plan_expiry_date: string | null;
+  old_plan_price: number | null; // sheet's "Old plan price" column — the plan being renewed FROM
   priority: Priority;
   status: LeadStatus;
   payment_status: PaymentStatus;

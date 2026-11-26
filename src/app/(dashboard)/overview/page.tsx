@@ -39,6 +39,11 @@ export default async function OverviewPage({
   const allLeads = leads ?? [];
 
   const totalLeads = allLeads.length;
+  // Target = 20% of Active-status leads (sheet Column I) this month — a
+  // coach's own number is scoped to their leads via RLS already; for admin
+  // this is every coach's Active leads combined.
+  const activeLeadsCount = allLeads.filter((l) => l.lead_master_status === 'Active').length;
+  const targetCount = Math.round(activeLeadsCount * 0.2);
   const contacted = allLeads.filter((l) => l.status !== 'New' && l.status !== 'Not Contacted').length;
   const followUpsPending = allLeads.filter(
     (l) => l.status === 'Follow-up Required'
@@ -133,7 +138,7 @@ export default async function OverviewPage({
 
   // Coach-wise summary (admin only) — coach identity is the sheet's own
   // "Renewal Coach" name, not the list of invited/logged-in accounts.
-  let coachSummary: { name: string; assigned: number; renewed: number; revenue: number }[] = [];
+  let coachSummary: { name: string; assigned: number; renewed: number; revenue: number; target: number }[] = [];
   if (user.role === 'admin') {
     const coachNames = Array.from(
       new Set(allLeads.map((l: any) => l.source_coach_name).filter((n: string | null): n is string => !!n))
@@ -144,11 +149,13 @@ export default async function OverviewPage({
       const revenue = verifiedPayments
         .filter((p) => theirLeadIds.has(p.lead_id))
         .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+      const theirActiveLeadsCount = theirLeads.filter((l) => l.lead_master_status === 'Active').length;
       return {
         name,
         assigned: theirLeads.length,
         renewed: theirLeads.filter((l) => verifiedLeadIds.has(l.id)).length,
         revenue,
+        target: Math.round(theirActiveLeadsCount * 0.2),
       };
     });
   }
@@ -164,13 +171,22 @@ export default async function OverviewPage({
 
       <MonthTabs availableMonths={availableMonths} activeMonth={activeMonth} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
         <StatCard label="Total Leads" value={totalLeads} />
+        <StatCard
+          label={user.role === 'admin' ? 'Total Target' : 'Your Target'}
+          value={targetCount}
+          accent="blue"
+        />
         <StatCard label="Contacted" value={contacted} accent="blue" />
         <StatCard label="Follow-ups Pending" value={followUpsPending} accent="amber" />
         <StatCard label="Interested" value={interested} accent="purple" />
         <StatCard label="Payment Pending" value={paymentPending} accent="amber" />
       </div>
+      <p className="text-xs text-slate-400 -mt-2 mb-4">
+        Target is 20% of {user.role === 'admin' ? 'combined' : 'your'} Active-status leads this month
+        ({activeLeadsCount} Active).
+      </p>
 
       <div className={`grid grid-cols-1 ${user.role === 'admin' ? 'md:grid-cols-3' : 'md:grid-cols-1 max-w-sm'} gap-4 mb-8`}>
         <BreakdownStatCard label="Renewed" total={renewed} accent="green" breakdown={renewedBreakdown} />
@@ -202,6 +218,7 @@ export default async function OverviewPage({
               <tr>
                 <th>Coach</th>
                 <th>Assigned Leads</th>
+                <th>Target</th>
                 <th>Renewals</th>
                 <th>Conversion %</th>
                 <th>Revenue</th>
@@ -212,6 +229,7 @@ export default async function OverviewPage({
                 <tr key={c.name}>
                   <td className="font-medium text-slate-700">{c.name}</td>
                   <td>{c.assigned}</td>
+                  <td>{c.target}</td>
                   <td>{c.renewed}</td>
                   <td>{c.assigned ? ((c.renewed / c.assigned) * 100).toFixed(1) : '0.0'}%</td>
                   <td>₹{c.revenue.toLocaleString('en-IN')}</td>

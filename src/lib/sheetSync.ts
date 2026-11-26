@@ -82,6 +82,7 @@ export async function syncParsedLeadsToDatabase(
           team: lead.team,
           clinical_discipline: lead.clinicalDiscipline,
           plan_expiry_date: lead.planExpiryDate,
+          old_plan_price: lead.oldPlanPrice,
         };
         const updatePayload: Record<string, unknown> = {};
         for (const [field, value] of Object.entries(candidateFields)) {
@@ -142,6 +143,7 @@ export async function syncParsedLeadsToDatabase(
           coach_id: coachId,
           month_cohort: lead.monthCohort,
           plan_expiry_date: lead.planExpiryDate,
+          old_plan_price: lead.oldPlanPrice,
           status: lead.status,
           lead_master_status: lead.leadMasterStatus,
           needs_review: lead.needsReview,

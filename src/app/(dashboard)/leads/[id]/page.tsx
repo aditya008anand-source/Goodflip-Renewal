@@ -131,6 +131,10 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
               label="Plan Expiry"
               value={lead.plan_expiry_date ? format(new Date(lead.plan_expiry_date), 'dd MMM yyyy') : '—'}
             />
+            <Row
+              label="Old Plan Price"
+              value={lead.old_plan_price != null ? `₹${Number(lead.old_plan_price).toLocaleString('en-IN')}` : '—'}
+            />
             <div className="flex items-center justify-between py-1">
               <dt className="text-slate-500">Status</dt>
               <dd>
