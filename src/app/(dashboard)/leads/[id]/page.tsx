@@ -217,6 +217,14 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
                     {p.payment_ref ? ` · Ref: ${p.payment_ref}` : ''}
                   </p>
                   {p.remarks && <p className="text-xs text-slate-400 mt-1">{p.remarks}</p>}
+                  {p.plan_details && (
+                    <div className="mt-2 rounded-md bg-slate-50 border border-slate-100 px-2.5 py-2 text-xs text-slate-600 space-y-0.5">
+                      <p className="font-semibold text-slate-700">Plan sold details</p>
+                      {formatPlanDetails(p.plan_details).map((line, i) => (
+                        <p key={i}>{line}</p>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs mt-1">
                     <span
                       className={
@@ -266,4 +274,48 @@ function Row({ label, value }: { label: string; value: string }) {
       <dd className="text-slate-800 font-medium text-right">{value}</dd>
     </div>
   );
+}
+
+// Turns the Careplan payment form's saved plan_details JSON (captured in
+// PaymentForm.tsx) into plain-text lines — shown in Payment history so a
+// verifier can actually see what was sold, not just the amount/category.
+function formatPlanDetails(details: any): string[] {
+  const lines: string[] = [];
+  if (details.planName || details.duration) {
+    lines.push(`Plan: ${details.planName || '—'}${details.duration ? ` · ${details.duration}` : ''}`);
+  }
+  if (details.diagnostics) {
+    lines.push(
+      `Diagnostics: ${details.diagnostics.done ? `Yes (${details.diagnostics.count || '—'})` : 'No'}`
+    );
+  }
+  if (details.consultation) {
+    lines.push(
+      `Dr. Consultation: ${details.consultation.done ? `Yes (${details.consultation.count || '—'})` : 'No'}`
+    );
+  }
+  if (details.coaches?.length) {
+    lines.push(`Coaches: ${details.coaches.join(', ')}`);
+  }
+  if (details.drug) {
+    lines.push(
+      `Drug: ${details.drug.done ? `Yes (${details.drug.name || '—'}${details.drug.type ? `, ${details.drug.type}` : ''})` : 'No'}`
+    );
+  }
+  if (details.bca) {
+    lines.push(`Device — BCA: ${details.bca.done ? `Yes (${details.bca.count || '—'})` : 'No'}`);
+  }
+  if (details.cgm) {
+    if (details.cgm.done) {
+      const parts = [details.cgm.types?.join(', ') || '—'];
+      if (details.cgm.types?.includes('Goodflip')) {
+        parts.push(`Sensor: ${details.cgm.sensorCount || '—'}`);
+        if (details.cgm.transmitterCount) parts.push(`Transmitter: ${details.cgm.transmitterCount}`);
+      }
+      lines.push(`Device — CGM: Yes (${parts.join(' · ')})`);
+    } else {
+      lines.push('Device — CGM: No');
+    }
+  }
+  return lines;
 }
